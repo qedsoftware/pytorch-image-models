@@ -37,6 +37,12 @@ dependencies = [
 ]
 dynamic = ["version"]
 
+[tool.pdm.build]
+includes = [
+    "timm/",
+    "train.py",
+]
+
 [project.urls]
 homepage = "https://github.com/huggingface/pytorch-image-models"
 documentation = "https://huggingface.co/docs/timm/en/index"
