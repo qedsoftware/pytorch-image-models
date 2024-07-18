@@ -1,5 +1,6 @@
 """ Model / Layer Config singleton state
 """
+
 import os
 import warnings
 from typing import Any, Optional
@@ -7,8 +8,15 @@ from typing import Any, Optional
 import torch
 
 __all__ = [
-    'is_exportable', 'is_scriptable', 'is_no_jit', 'use_fused_attn',
-    'set_exportable', 'set_scriptable', 'set_no_jit', 'set_layer_config', 'set_fused_attn'
+    "is_exportable",
+    "is_scriptable",
+    "is_no_jit",
+    "use_fused_attn",
+    "set_exportable",
+    "set_scriptable",
+    "set_no_jit",
+    "set_layer_config",
+    "set_fused_attn",
 ]
 
 # Set to True if prefer to have layers with no jit optimization (includes activations)
@@ -27,11 +35,13 @@ _SCRIPTABLE = False
 
 
 # use torch.scaled_dot_product_attention where possible
-_HAS_FUSED_ATTN = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
-if 'TIMM_FUSED_ATTN' in os.environ:
-    _USE_FUSED_ATTN = int(os.environ['TIMM_FUSED_ATTN'])
+_HAS_FUSED_ATTN = hasattr(torch.nn.functional, "scaled_dot_product_attention")
+if "TIMM_FUSED_ATTN" in os.environ:
+    _USE_FUSED_ATTN = int(os.environ["TIMM_FUSED_ATTN"])
 else:
-    _USE_FUSED_ATTN = 1  # 0 == off, 1 == on (for tested use), 2 == on (for experimental use)
+    _USE_FUSED_ATTN = (
+        1  # 0 == off, 1 == on (for tested use), 2 == on (for experimental use)
+    )
 
 
 def is_no_jit():
@@ -92,15 +102,17 @@ class set_scriptable:
 
 
 class set_layer_config:
-    """ Layer config context manager that allows setting all layer config flags at once.
+    """Layer config context manager that allows setting all layer config flags at once.
     If a flag arg is None, it will not change the current value.
     """
+
     def __init__(
-            self,
-            scriptable: Optional[bool] = None,
-            exportable: Optional[bool] = None,
-            no_jit: Optional[bool] = None,
-            no_activation_jit: Optional[bool] = None):
+        self,
+        scriptable: Optional[bool] = None,
+        exportable: Optional[bool] = None,
+        no_jit: Optional[bool] = None,
+        no_activation_jit: Optional[bool] = None,
+    ):
         global _SCRIPTABLE
         global _EXPORTABLE
         global _NO_JIT
@@ -139,7 +151,9 @@ def use_fused_attn(experimental: bool = False) -> bool:
 def set_fused_attn(enable: bool = True, experimental: bool = False):
     global _USE_FUSED_ATTN
     if not _HAS_FUSED_ATTN:
-        warnings.warn('This version of pytorch does not have F.scaled_dot_product_attention, fused_attn flag ignored.')
+        warnings.warn(
+            "This version of pytorch does not have F.scaled_dot_product_attention, fused_attn flag ignored."
+        )
         return
     if experimental and enable:
         _USE_FUSED_ATTN = 2

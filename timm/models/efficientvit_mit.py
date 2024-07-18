@@ -6,7 +6,7 @@ Paper: `Efficientvit: Enhanced linear attention for high-resolution low-computat
 Adapted from official impl at https://github.com/mit-han-lab/efficientvit
 """
 
-__all__ = ['EfficientVit', 'EfficientVitLarge']
+__all__ = ["EfficientVit", "EfficientVitLarge"]
 from typing import List, Optional
 from functools import partial
 
@@ -55,7 +55,7 @@ class ConvNormAct(nn.Module):
         dilation=1,
         groups=1,
         bias=False,
-        dropout=0.,
+        dropout=0.0,
         norm_layer=nn.BatchNorm2d,
         act_layer=nn.ReLU,
     ):
@@ -70,7 +70,9 @@ class ConvNormAct(nn.Module):
             groups=groups,
             bias=bias,
         )
-        self.norm = norm_layer(num_features=out_channels) if norm_layer else nn.Identity()
+        self.norm = (
+            norm_layer(num_features=out_channels) if norm_layer else nn.Identity()
+        )
         self.act = act_layer(inplace=True) if act_layer is not None else nn.Identity()
 
     def forward(self, x):
@@ -299,20 +301,28 @@ class LiteMLA(nn.Module):
             norm_layer=norm_layer[0],
             act_layer=act_layer[0],
         )
-        self.aggreg = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(
-                    3 * total_dim,
-                    3 * total_dim,
-                    scale,
-                    padding=get_same_padding(scale),
-                    groups=3 * total_dim,
-                    bias=use_bias[0],
-                ),
-                nn.Conv2d(3 * total_dim, 3 * total_dim, 1, groups=3 * heads, bias=use_bias[0]),
-            )
-            for scale in scales
-        ])
+        self.aggreg = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Conv2d(
+                        3 * total_dim,
+                        3 * total_dim,
+                        scale,
+                        padding=get_same_padding(scale),
+                        groups=3 * total_dim,
+                        bias=use_bias[0],
+                    ),
+                    nn.Conv2d(
+                        3 * total_dim,
+                        3 * total_dim,
+                        1,
+                        groups=3 * heads,
+                        bias=use_bias[0],
+                    ),
+                )
+                for scale in scales
+            ]
+        )
         self.kernel_func = kernel_func(inplace=False)
 
         self.proj = ConvNormAct(
@@ -341,13 +351,15 @@ class LiteMLA(nn.Module):
         for op in self.aggreg:
             multi_scale_qkv.append(op(qkv))
         multi_scale_qkv = torch.cat(multi_scale_qkv, dim=1)
-        multi_scale_qkv = multi_scale_qkv.reshape(B, -1, 3 * self.dim, H * W).transpose(-1, -2)
+        multi_scale_qkv = multi_scale_qkv.reshape(B, -1, 3 * self.dim, H * W).transpose(
+            -1, -2
+        )
         q, k, v = multi_scale_qkv.chunk(3, dim=-1)
 
         # lightweight global attention
         q = self.kernel_func(q)
         k = self.kernel_func(k)
-        v = F.pad(v, (0, 1), mode="constant", value=1.)
+        v = F.pad(v, (0, 1), mode="constant", value=1.0)
 
         if not torch.jit.is_scripting():
             with torch.autocast(device_type=v.device.type, enabled=False):
@@ -422,15 +434,15 @@ class ResidualBlock(nn.Module):
         return res
 
 
-def build_local_block(        
-        in_channels: int,
-        out_channels: int,
-        stride: int,
-        expand_ratio: float,
-        norm_layer: str,
-        act_layer: str,
-        fewer_norm: bool = False,
-        block_type: str = "default",
+def build_local_block(
+    in_channels: int,
+    out_channels: int,
+    stride: int,
+    expand_ratio: float,
+    norm_layer: str,
+    act_layer: str,
+    fewer_norm: bool = False,
+    block_type: str = "default",
 ):
     assert block_type in ["default", "large", "fused"]
     if expand_ratio == 1:
@@ -477,59 +489,70 @@ def build_local_block(
 
 
 class Stem(nn.Sequential):
-    def __init__(self, in_chs, out_chs, depth, norm_layer, act_layer, block_type='default'):
+    def __init__(
+        self, in_chs, out_chs, depth, norm_layer, act_layer, block_type="default"
+    ):
         super().__init__()
         self.stride = 2
 
         self.add_module(
-            'in_conv',
+            "in_conv",
             ConvNormAct(
-                in_chs, out_chs,
-                kernel_size=3, stride=2, norm_layer=norm_layer, act_layer=act_layer,
-            )
+                in_chs,
+                out_chs,
+                kernel_size=3,
+                stride=2,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+            ),
         )
         stem_block = 0
         for _ in range(depth):
-            self.add_module(f'res{stem_block}', ResidualBlock(
-                build_local_block(
-                    in_channels=out_chs,
-                    out_channels=out_chs,
-                    stride=1,
-                    expand_ratio=1,
-                    norm_layer=norm_layer,
-                    act_layer=act_layer,
-                    block_type=block_type,
+            self.add_module(
+                f"res{stem_block}",
+                ResidualBlock(
+                    build_local_block(
+                        in_channels=out_chs,
+                        out_channels=out_chs,
+                        stride=1,
+                        expand_ratio=1,
+                        norm_layer=norm_layer,
+                        act_layer=act_layer,
+                        block_type=block_type,
+                    ),
+                    nn.Identity(),
                 ),
-                nn.Identity(),
-            ))
+            )
             stem_block += 1
 
 
 class EfficientVitStage(nn.Module):
     def __init__(
-            self,
-            in_chs,
-            out_chs,
-            depth,
-            norm_layer,
-            act_layer,
-            expand_ratio,
-            head_dim,
-            vit_stage=False,
+        self,
+        in_chs,
+        out_chs,
+        depth,
+        norm_layer,
+        act_layer,
+        expand_ratio,
+        head_dim,
+        vit_stage=False,
     ):
         super(EfficientVitStage, self).__init__()
-        blocks = [ResidualBlock(
-            build_local_block(
-                in_channels=in_chs,
-                out_channels=out_chs,
-                stride=2,
-                expand_ratio=expand_ratio,
-                norm_layer=norm_layer,
-                act_layer=act_layer,
-                fewer_norm=vit_stage,
-            ),
-            None,
-        )]
+        blocks = [
+            ResidualBlock(
+                build_local_block(
+                    in_channels=in_chs,
+                    out_channels=out_chs,
+                    stride=2,
+                    expand_ratio=expand_ratio,
+                    norm_layer=norm_layer,
+                    act_layer=act_layer,
+                    fewer_norm=vit_stage,
+                ),
+                None,
+            )
+        ]
         in_chs = out_chs
 
         if vit_stage:
@@ -547,17 +570,19 @@ class EfficientVitStage(nn.Module):
         else:
             # for stage 1, 2
             for i in range(1, depth):
-                blocks.append(ResidualBlock(
-                    build_local_block(
-                        in_channels=in_chs,
-                        out_channels=out_chs,
-                        stride=1,
-                        expand_ratio=expand_ratio,
-                        norm_layer=norm_layer,
-                        act_layer=act_layer
-                    ),
-                    nn.Identity(),
-                ))
+                blocks.append(
+                    ResidualBlock(
+                        build_local_block(
+                            in_channels=in_chs,
+                            out_channels=out_chs,
+                            stride=1,
+                            expand_ratio=expand_ratio,
+                            norm_layer=norm_layer,
+                            act_layer=act_layer,
+                        ),
+                        nn.Identity(),
+                    )
+                )
 
         self.blocks = nn.Sequential(*blocks)
 
@@ -567,30 +592,32 @@ class EfficientVitStage(nn.Module):
 
 class EfficientVitLargeStage(nn.Module):
     def __init__(
-            self,
-            in_chs,
-            out_chs,
-            depth,
-            norm_layer,
-            act_layer,
-            head_dim,
-            vit_stage=False,
-            fewer_norm=False,
+        self,
+        in_chs,
+        out_chs,
+        depth,
+        norm_layer,
+        act_layer,
+        head_dim,
+        vit_stage=False,
+        fewer_norm=False,
     ):
         super(EfficientVitLargeStage, self).__init__()
-        blocks = [ResidualBlock(
-            build_local_block(
-                in_channels=in_chs,
-                out_channels=out_chs,
-                stride=2,
-                expand_ratio=24 if vit_stage else 16,
-                norm_layer=norm_layer,
-                act_layer=act_layer,
-                fewer_norm=vit_stage or fewer_norm,
-                block_type='default' if fewer_norm else 'fused',
-            ),
-            None,
-        )]
+        blocks = [
+            ResidualBlock(
+                build_local_block(
+                    in_channels=in_chs,
+                    out_channels=out_chs,
+                    stride=2,
+                    expand_ratio=24 if vit_stage else 16,
+                    norm_layer=norm_layer,
+                    act_layer=act_layer,
+                    fewer_norm=vit_stage or fewer_norm,
+                    block_type="default" if fewer_norm else "fused",
+                ),
+                None,
+            )
+        ]
         in_chs = out_chs
 
         if vit_stage:
@@ -608,19 +635,21 @@ class EfficientVitLargeStage(nn.Module):
         else:
             # for stage 1, 2, 3
             for i in range(depth):
-                blocks.append(ResidualBlock(
-                    build_local_block(
-                        in_channels=in_chs,
-                        out_channels=out_chs,
-                        stride=1,
-                        expand_ratio=4,
-                        norm_layer=norm_layer,
-                        act_layer=act_layer,
-                        fewer_norm=fewer_norm,
-                        block_type='default' if fewer_norm else 'fused',
-                    ),
-                    nn.Identity(),
-                ))
+                blocks.append(
+                    ResidualBlock(
+                        build_local_block(
+                            in_channels=in_chs,
+                            out_channels=out_chs,
+                            stride=1,
+                            expand_ratio=4,
+                            norm_layer=norm_layer,
+                            act_layer=act_layer,
+                            fewer_norm=fewer_norm,
+                            block_type="default" if fewer_norm else "fused",
+                        ),
+                        nn.Identity(),
+                    )
+                )
 
         self.blocks = nn.Sequential(*blocks)
 
@@ -634,31 +663,40 @@ class ClassifierHead(nn.Module):
         in_channels: int,
         widths: List[int],
         num_classes: int = 1000,
-        dropout: float = 0.,
+        dropout: float = 0.0,
         norm_layer=nn.BatchNorm2d,
         act_layer=nn.Hardswish,
-        pool_type: str = 'avg',
+        pool_type: str = "avg",
         norm_eps: float = 1e-5,
     ):
         super(ClassifierHead, self).__init__()
         self.widths = widths
         self.num_features = widths[-1]
 
-        assert pool_type, 'Cannot disable pooling'
-        self.in_conv = ConvNormAct(in_channels, widths[0], 1, norm_layer=norm_layer, act_layer=act_layer)
+        assert pool_type, "Cannot disable pooling"
+        self.in_conv = ConvNormAct(
+            in_channels, widths[0], 1, norm_layer=norm_layer, act_layer=act_layer
+        )
         self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
         self.classifier = nn.Sequential(
             nn.Linear(widths[0], widths[1], bias=False),
             nn.LayerNorm(widths[1], eps=norm_eps),
             act_layer(inplace=True) if act_layer is not None else nn.Identity(),
             nn.Dropout(dropout, inplace=False),
-            nn.Linear(widths[1], num_classes, bias=True) if num_classes > 0 else nn.Identity(),
+            (
+                nn.Linear(widths[1], num_classes, bias=True)
+                if num_classes > 0
+                else nn.Identity()
+            ),
         )
 
     def reset(self, num_classes: int, pool_type: Optional[str] = None):
         if pool_type is not None:
-            assert pool_type, 'Cannot disable pooling'
-            self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True,)
+            assert pool_type, "Cannot disable pooling"
+            self.global_pool = SelectAdaptivePool2d(
+                pool_type=pool_type,
+                flatten=True,
+            )
         if num_classes > 0:
             self.classifier[-1] = nn.Linear(self.num_features, num_classes, bias=True)
         else:
@@ -688,7 +726,7 @@ class EfficientVit(nn.Module):
         expand_ratio=4,
         norm_layer=nn.BatchNorm2d,
         act_layer=nn.Hardswish,
-        global_pool='avg',
+        global_pool="avg",
         head_widths=(),
         drop_rate=0.0,
         num_classes=1000,
@@ -707,19 +745,23 @@ class EfficientVit(nn.Module):
         self.stages = nn.Sequential()
         in_channels = widths[0]
         for i, (w, d) in enumerate(zip(widths[1:], depths[1:])):
-            self.stages.append(EfficientVitStage(
-                in_channels,
-                w,
-                depth=d,
-                norm_layer=norm_layer,
-                act_layer=act_layer,
-                expand_ratio=expand_ratio,
-                head_dim=head_dim,
-                vit_stage=i >= 2,
-            ))
+            self.stages.append(
+                EfficientVitStage(
+                    in_channels,
+                    w,
+                    depth=d,
+                    norm_layer=norm_layer,
+                    act_layer=act_layer,
+                    expand_ratio=expand_ratio,
+                    head_dim=head_dim,
+                    vit_stage=i >= 2,
+                )
+            )
             stride *= 2
             in_channels = w
-            self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{i}')]
+            self.feature_info += [
+                dict(num_chs=in_channels, reduction=stride, module=f"stages.{i}")
+            ]
 
         self.num_features = in_channels
         self.head = ClassifierHead(
@@ -734,11 +776,15 @@ class EfficientVit(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^stem',
-            blocks=r'^stages\.(\d+)' if coarse else [
-                (r'^stages\.(\d+).downsample', (0,)),
-                (r'^stages\.(\d+)\.\w+\.(\d+)', None),
-            ]
+            stem=r"^stem",
+            blocks=(
+                r"^stages\.(\d+)"
+                if coarse
+                else [
+                    (r"^stages\.(\d+).downsample", (0,)),
+                    (r"^stages\.(\d+)\.\w+\.(\d+)", None),
+                ]
+            ),
         )
         return matcher
 
@@ -780,7 +826,7 @@ class EfficientVitLarge(nn.Module):
         head_dim=32,
         norm_layer=nn.BatchNorm2d,
         act_layer=GELUTanh,
-        global_pool='avg',
+        global_pool="avg",
         head_widths=(),
         drop_rate=0.0,
         num_classes=1000,
@@ -794,7 +840,9 @@ class EfficientVitLarge(nn.Module):
         norm_layer = partial(norm_layer, eps=self.norm_eps)
 
         # input stem
-        self.stem = Stem(in_chans, widths[0], depths[0], norm_layer, act_layer, block_type='large')
+        self.stem = Stem(
+            in_chans, widths[0], depths[0], norm_layer, act_layer, block_type="large"
+        )
         stride = self.stem.stride
 
         # stages
@@ -802,19 +850,23 @@ class EfficientVitLarge(nn.Module):
         self.stages = nn.Sequential()
         in_channels = widths[0]
         for i, (w, d) in enumerate(zip(widths[1:], depths[1:])):
-            self.stages.append(EfficientVitLargeStage(
-                in_channels,
-                w,
-                depth=d,
-                norm_layer=norm_layer,
-                act_layer=act_layer,
-                head_dim=head_dim,
-                vit_stage=i >= 3,
-                fewer_norm=i >= 2,
-            ))
+            self.stages.append(
+                EfficientVitLargeStage(
+                    in_channels,
+                    w,
+                    depth=d,
+                    norm_layer=norm_layer,
+                    act_layer=act_layer,
+                    head_dim=head_dim,
+                    vit_stage=i >= 3,
+                    fewer_norm=i >= 2,
+                )
+            )
             stride *= 2
             in_channels = w
-            self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{i}')]
+            self.feature_info += [
+                dict(num_chs=in_channels, reduction=stride, module=f"stages.{i}")
+            ]
 
         self.num_features = in_channels
         self.head = ClassifierHead(
@@ -831,11 +883,15 @@ class EfficientVitLarge(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^stem',
-            blocks=r'^stages\.(\d+)' if coarse else [
-                (r'^stages\.(\d+).downsample', (0,)),
-                (r'^stages\.(\d+)\.\w+\.(\d+)', None),
-            ]
+            stem=r"^stem",
+            blocks=(
+                r"^stages\.(\d+)"
+                if coarse
+                else [
+                    (r"^stages\.(\d+).downsample", (0,)),
+                    (r"^stages\.(\d+)\.\w+\.(\d+)", None),
+                ]
+            ),
         )
         return matcher
 
@@ -868,132 +924,158 @@ class EfficientVitLarge(nn.Module):
         return x
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url="", **kwargs):
     return {
-        'url': url,
-        'num_classes': 1000,
-        'mean': IMAGENET_DEFAULT_MEAN,
-        'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.in_conv.conv',
-        'classifier': 'head.classifier.4',
-        'crop_pct': 0.95,
-        'input_size': (3, 224, 224),
-        'pool_size': (7, 7),
+        "url": url,
+        "num_classes": 1000,
+        "mean": IMAGENET_DEFAULT_MEAN,
+        "std": IMAGENET_DEFAULT_STD,
+        "first_conv": "stem.in_conv.conv",
+        "classifier": "head.classifier.4",
+        "crop_pct": 0.95,
+        "input_size": (3, 224, 224),
+        "pool_size": (7, 7),
         **kwargs,
     }
 
 
-default_cfgs = generate_default_cfgs({
-    'efficientvit_b0.r224_in1k': _cfg(
-        hf_hub_id='timm/',
-    ),
-    'efficientvit_b1.r224_in1k': _cfg(
-        hf_hub_id='timm/',
-    ),
-    'efficientvit_b1.r256_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
-    ),
-    'efficientvit_b1.r288_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
-    ),
-    'efficientvit_b2.r224_in1k': _cfg(
-        hf_hub_id='timm/',
-    ),
-    'efficientvit_b2.r256_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
-    ),
-    'efficientvit_b2.r288_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
-    ),
-    'efficientvit_b3.r224_in1k': _cfg(
-        hf_hub_id='timm/',
-    ),
-    'efficientvit_b3.r256_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
-    ),
-    'efficientvit_b3.r288_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
-    ),
-    'efficientvit_l1.r224_in1k': _cfg(
-        hf_hub_id='timm/',
-        crop_pct=1.0,
-    ),
-    'efficientvit_l2.r224_in1k': _cfg(
-        hf_hub_id='timm/',
-        crop_pct=1.0,
-    ),
-    'efficientvit_l2.r256_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
-    ),
-    'efficientvit_l2.r288_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
-    ),
-    'efficientvit_l2.r384_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
-    ),
-    'efficientvit_l3.r224_in1k': _cfg(
-        hf_hub_id='timm/',
-        crop_pct=1.0,
-    ),
-    'efficientvit_l3.r256_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
-    ),
-    'efficientvit_l3.r320_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0,
-    ),
-    'efficientvit_l3.r384_in1k': _cfg(
-        hf_hub_id='timm/',
-        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
-    ),
-    # 'efficientvit_l0_sam.sam': _cfg(
-    #     # hf_hub_id='timm/',
-    #     input_size=(3, 512, 512), crop_pct=1.0,
-    #     num_classes=0,
-    # ),
-    # 'efficientvit_l1_sam.sam': _cfg(
-    #     # hf_hub_id='timm/',
-    #     input_size=(3, 512, 512), crop_pct=1.0,
-    #     num_classes=0,
-    # ),
-    # 'efficientvit_l2_sam.sam': _cfg(
-    #     # hf_hub_id='timm/',f
-    #     input_size=(3, 512, 512), crop_pct=1.0,
-    #     num_classes=0,
-    # ),
-})
+default_cfgs = generate_default_cfgs(
+    {
+        "efficientvit_b0.r224_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "efficientvit_b1.r224_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "efficientvit_b1.r256_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 256, 256),
+            pool_size=(8, 8),
+            crop_pct=1.0,
+        ),
+        "efficientvit_b1.r288_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 288, 288),
+            pool_size=(9, 9),
+            crop_pct=1.0,
+        ),
+        "efficientvit_b2.r224_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "efficientvit_b2.r256_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 256, 256),
+            pool_size=(8, 8),
+            crop_pct=1.0,
+        ),
+        "efficientvit_b2.r288_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 288, 288),
+            pool_size=(9, 9),
+            crop_pct=1.0,
+        ),
+        "efficientvit_b3.r224_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "efficientvit_b3.r256_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 256, 256),
+            pool_size=(8, 8),
+            crop_pct=1.0,
+        ),
+        "efficientvit_b3.r288_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 288, 288),
+            pool_size=(9, 9),
+            crop_pct=1.0,
+        ),
+        "efficientvit_l1.r224_in1k": _cfg(
+            hf_hub_id="timm/",
+            crop_pct=1.0,
+        ),
+        "efficientvit_l2.r224_in1k": _cfg(
+            hf_hub_id="timm/",
+            crop_pct=1.0,
+        ),
+        "efficientvit_l2.r256_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 256, 256),
+            pool_size=(8, 8),
+            crop_pct=1.0,
+        ),
+        "efficientvit_l2.r288_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 288, 288),
+            pool_size=(9, 9),
+            crop_pct=1.0,
+        ),
+        "efficientvit_l2.r384_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 384, 384),
+            pool_size=(12, 12),
+            crop_pct=1.0,
+        ),
+        "efficientvit_l3.r224_in1k": _cfg(
+            hf_hub_id="timm/",
+            crop_pct=1.0,
+        ),
+        "efficientvit_l3.r256_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 256, 256),
+            pool_size=(8, 8),
+            crop_pct=1.0,
+        ),
+        "efficientvit_l3.r320_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 320, 320),
+            pool_size=(10, 10),
+            crop_pct=1.0,
+        ),
+        "efficientvit_l3.r384_in1k": _cfg(
+            hf_hub_id="timm/",
+            input_size=(3, 384, 384),
+            pool_size=(12, 12),
+            crop_pct=1.0,
+        ),
+        # 'efficientvit_l0_sam.sam': _cfg(
+        #     # hf_hub_id='timm/',
+        #     input_size=(3, 512, 512), crop_pct=1.0,
+        #     num_classes=0,
+        # ),
+        # 'efficientvit_l1_sam.sam': _cfg(
+        #     # hf_hub_id='timm/',
+        #     input_size=(3, 512, 512), crop_pct=1.0,
+        #     num_classes=0,
+        # ),
+        # 'efficientvit_l2_sam.sam': _cfg(
+        #     # hf_hub_id='timm/',f
+        #     input_size=(3, 512, 512), crop_pct=1.0,
+        #     num_classes=0,
+        # ),
+    }
+)
 
 
 def _create_efficientvit(variant, pretrained=False, **kwargs):
-    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3))
+    out_indices = kwargs.pop("out_indices", (0, 1, 2, 3))
     model = build_model_with_cfg(
         EfficientVit,
         variant,
         pretrained,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
-        **kwargs
+        **kwargs,
     )
     return model
 
 
 def _create_efficientvit_large(variant, pretrained=False, **kwargs):
-    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3))
+    out_indices = kwargs.pop("out_indices", (0, 1, 2, 3))
     model = build_model_with_cfg(
         EfficientVitLarge,
         variant,
         pretrained,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
-        **kwargs
+        **kwargs,
     )
     return model
 
@@ -1001,50 +1083,92 @@ def _create_efficientvit_large(variant, pretrained=False, **kwargs):
 @register_model
 def efficientvit_b0(pretrained=False, **kwargs):
     model_args = dict(
-        widths=(8, 16, 32, 64, 128), depths=(1, 2, 2, 2, 2), head_dim=16, head_widths=(1024, 1280))
-    return _create_efficientvit('efficientvit_b0', pretrained=pretrained, **dict(model_args, **kwargs))
+        widths=(8, 16, 32, 64, 128),
+        depths=(1, 2, 2, 2, 2),
+        head_dim=16,
+        head_widths=(1024, 1280),
+    )
+    return _create_efficientvit(
+        "efficientvit_b0", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientvit_b1(pretrained=False, **kwargs):
     model_args = dict(
-        widths=(16, 32, 64, 128, 256), depths=(1, 2, 3, 3, 4), head_dim=16, head_widths=(1536, 1600))
-    return _create_efficientvit('efficientvit_b1', pretrained=pretrained, **dict(model_args, **kwargs))
+        widths=(16, 32, 64, 128, 256),
+        depths=(1, 2, 3, 3, 4),
+        head_dim=16,
+        head_widths=(1536, 1600),
+    )
+    return _create_efficientvit(
+        "efficientvit_b1", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientvit_b2(pretrained=False, **kwargs):
     model_args = dict(
-        widths=(24, 48, 96, 192, 384), depths=(1, 3, 4, 4, 6), head_dim=32, head_widths=(2304, 2560))
-    return _create_efficientvit('efficientvit_b2', pretrained=pretrained, **dict(model_args, **kwargs))
+        widths=(24, 48, 96, 192, 384),
+        depths=(1, 3, 4, 4, 6),
+        head_dim=32,
+        head_widths=(2304, 2560),
+    )
+    return _create_efficientvit(
+        "efficientvit_b2", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientvit_b3(pretrained=False, **kwargs):
     model_args = dict(
-        widths=(32, 64, 128, 256, 512), depths=(1, 4, 6, 6, 9), head_dim=32, head_widths=(2304, 2560))
-    return _create_efficientvit('efficientvit_b3', pretrained=pretrained, **dict(model_args, **kwargs))
+        widths=(32, 64, 128, 256, 512),
+        depths=(1, 4, 6, 6, 9),
+        head_dim=32,
+        head_widths=(2304, 2560),
+    )
+    return _create_efficientvit(
+        "efficientvit_b3", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientvit_l1(pretrained=False, **kwargs):
     model_args = dict(
-        widths=(32, 64, 128, 256, 512), depths=(1, 1, 1, 6, 6), head_dim=32, head_widths=(3072, 3200))
-    return _create_efficientvit_large('efficientvit_l1', pretrained=pretrained, **dict(model_args, **kwargs))
+        widths=(32, 64, 128, 256, 512),
+        depths=(1, 1, 1, 6, 6),
+        head_dim=32,
+        head_widths=(3072, 3200),
+    )
+    return _create_efficientvit_large(
+        "efficientvit_l1", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientvit_l2(pretrained=False, **kwargs):
     model_args = dict(
-        widths=(32, 64, 128, 256, 512), depths=(1, 2, 2, 8, 8), head_dim=32, head_widths=(3072, 3200))
-    return _create_efficientvit_large('efficientvit_l2', pretrained=pretrained, **dict(model_args, **kwargs))
+        widths=(32, 64, 128, 256, 512),
+        depths=(1, 2, 2, 8, 8),
+        head_dim=32,
+        head_widths=(3072, 3200),
+    )
+    return _create_efficientvit_large(
+        "efficientvit_l2", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientvit_l3(pretrained=False, **kwargs):
     model_args = dict(
-        widths=(64, 128, 256, 512, 1024), depths=(1, 2, 2, 8, 8), head_dim=32, head_widths=(6144, 6400))
-    return _create_efficientvit_large('efficientvit_l3', pretrained=pretrained, **dict(model_args, **kwargs))
+        widths=(64, 128, 256, 512, 1024),
+        depths=(1, 2, 2, 8, 8),
+        head_dim=32,
+        head_widths=(6144, 6400),
+    )
+    return _create_efficientvit_large(
+        "efficientvit_l3", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 # FIXME will wait for v2 SAM models which are pending

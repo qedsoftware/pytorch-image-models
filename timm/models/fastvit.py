@@ -13,8 +13,15 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, trunc_normal_, create_conv2d, ConvNormAct, SqueezeExcite, use_fused_attn, \
-    ClassifierHead
+from timm.layers import (
+    DropPath,
+    trunc_normal_,
+    create_conv2d,
+    ConvNormAct,
+    SqueezeExcite,
+    use_fused_attn,
+    ClassifierHead,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -41,19 +48,19 @@ class MobileOneBlock(nn.Module):
     """
 
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            kernel_size: int,
-            stride: int = 1,
-            dilation: int = 1,
-            group_size: int = 0,
-            inference_mode: bool = False,
-            use_se: bool = False,
-            use_act: bool = True,
-            use_scale_branch: bool = True,
-            num_conv_branches: int = 1,
-            act_layer: nn.Module = nn.GELU,
+        self,
+        in_chs: int,
+        out_chs: int,
+        kernel_size: int,
+        stride: int = 1,
+        dilation: int = 1,
+        group_size: int = 0,
+        inference_mode: bool = False,
+        use_se: bool = False,
+        use_act: bool = True,
+        use_scale_branch: bool = True,
+        num_conv_branches: int = 1,
+        act_layer: nn.Module = nn.GELU,
     ) -> None:
         """Construct a MobileOneBlock module.
 
@@ -105,16 +112,19 @@ class MobileOneBlock(nn.Module):
 
             # Re-parameterizable conv branches
             if num_conv_branches > 0:
-                self.conv_kxk = nn.ModuleList([
-                    ConvNormAct(
-                        self.in_chs,
-                        self.out_chs,
-                        kernel_size=kernel_size,
-                        stride=self.stride,
-                        groups=self.groups,
-                        apply_act=False,
-                    ) for _ in range(self.num_conv_branches)
-                ])
+                self.conv_kxk = nn.ModuleList(
+                    [
+                        ConvNormAct(
+                            self.in_chs,
+                            self.out_chs,
+                            kernel_size=kernel_size,
+                            stride=self.stride,
+                            groups=self.groups,
+                            apply_act=False,
+                        )
+                        for _ in range(self.num_conv_branches)
+                    ]
+                )
             else:
                 self.conv_kxk = None
 
@@ -127,7 +137,7 @@ class MobileOneBlock(nn.Module):
                     kernel_size=1,
                     stride=self.stride,
                     groups=self.groups,
-                    apply_act=False
+                    apply_act=False,
                 )
 
         self.act = act_layer() if use_act else nn.Identity()
@@ -181,7 +191,7 @@ class MobileOneBlock(nn.Module):
 
         # Delete un-used branches
         for name, para in self.named_parameters():
-            if 'reparam_conv' in name:
+            if "reparam_conv" in name:
                 continue
             para.detach_()
 
@@ -281,16 +291,16 @@ class ReparamLargeKernelConv(nn.Module):
     """
 
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            kernel_size: int,
-            stride: int,
-            group_size: int,
-            small_kernel: Optional[int] = None,
-            use_se: bool = False,
-            act_layer: Optional[nn.Module] = None,
-            inference_mode: bool = False,
+        self,
+        in_chs: int,
+        out_chs: int,
+        kernel_size: int,
+        stride: int,
+        group_size: int,
+        small_kernel: Optional[int] = None,
+        use_se: bool = False,
+        act_layer: Optional[nn.Module] = None,
+        inference_mode: bool = False,
     ) -> None:
         """Construct a ReparamLargeKernelConv module.
 
@@ -423,10 +433,10 @@ class ReparamLargeKernelConv(nn.Module):
 
 
 def convolutional_stem(
-        in_chs: int,
-        out_chs: int,
-        act_layer: nn.Module = nn.GELU,
-        inference_mode: bool = False
+    in_chs: int,
+    out_chs: int,
+    act_layer: nn.Module = nn.GELU,
+    inference_mode: bool = False,
 ) -> nn.Sequential:
     """Build convolutional stem with MobileOne blocks.
 
@@ -473,15 +483,16 @@ class Attention(nn.Module):
     Source modified from:
     https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
     """
+
     fused_attn: torch.jit.Final[bool]
 
     def __init__(
-            self,
-            dim: int,
-            head_dim: int = 32,
-            qkv_bias: bool = False,
-            attn_drop: float = 0.0,
-            proj_drop: float = 0.0,
+        self,
+        dim: int,
+        head_dim: int = 32,
+        qkv_bias: bool = False,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
     ) -> None:
         """Build MHSA module that can handle 3D or 4D input tensors.
 
@@ -496,7 +507,7 @@ class Attention(nn.Module):
         assert dim % head_dim == 0, "dim should be divisible by head_dim"
         self.head_dim = head_dim
         self.num_heads = dim // head_dim
-        self.scale = head_dim ** -0.5
+        self.scale = head_dim**-0.5
         self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
@@ -517,8 +528,10 @@ class Attention(nn.Module):
 
         if self.fused_attn:
             x = torch.nn.functional.scaled_dot_product_attention(
-                q, k, v,
-                dropout_p=self.attn_drop.p if self.training else 0.,
+                q,
+                k,
+                v,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
             )
         else:
             q = q * self.scale
@@ -539,15 +552,15 @@ class PatchEmbed(nn.Module):
     """Convolutional patch embedding layer."""
 
     def __init__(
-            self,
-            patch_size: int,
-            stride: int,
-            in_chs: int,
-            embed_dim: int,
-            act_layer: nn.Module = nn.GELU,
-            lkc_use_act: bool = False,
-            use_se: bool = False,
-            inference_mode: bool = False,
+        self,
+        patch_size: int,
+        stride: int,
+        in_chs: int,
+        embed_dim: int,
+        act_layer: nn.Module = nn.GELU,
+        lkc_use_act: bool = False,
+        use_se: bool = False,
+        inference_mode: bool = False,
     ) -> None:
         """Build patch embedding layer.
 
@@ -568,7 +581,9 @@ class PatchEmbed(nn.Module):
                 group_size=1,
                 small_kernel=3,
                 use_se=use_se,
-                act_layer=act_layer if lkc_use_act else None,  # NOTE original weights didn't use this act
+                act_layer=(
+                    act_layer if lkc_use_act else None
+                ),  # NOTE original weights didn't use this act
                 inference_mode=inference_mode,
             ),
             MobileOneBlock(
@@ -579,7 +594,7 @@ class PatchEmbed(nn.Module):
                 use_se=False,
                 act_layer=act_layer,
                 inference_mode=inference_mode,
-            )
+            ),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -605,11 +620,11 @@ class RepMixer(nn.Module):
     """
 
     def __init__(
-            self,
-            dim,
-            kernel_size=3,
-            layer_scale_init_value=1e-5,
-            inference_mode: bool = False,
+        self,
+        dim,
+        kernel_size=3,
+        layer_scale_init_value=1e-5,
+        inference_mode: bool = False,
     ):
         """Build RepMixer Module.
 
@@ -701,7 +716,7 @@ class RepMixer(nn.Module):
         self.reparam_conv.bias.data = b
 
         for name, para in self.named_parameters():
-            if 'reparam_conv' in name:
+            if "reparam_conv" in name:
                 continue
             para.detach_()
         self.__delattr__("mixer")
@@ -713,12 +728,12 @@ class ConvMlp(nn.Module):
     """Convolutional FFN Module."""
 
     def __init__(
-            self,
-            in_chs: int,
-            hidden_channels: Optional[int] = None,
-            out_chs: Optional[int] = None,
-            act_layer: nn.Module = nn.GELU,
-            drop: float = 0.0,
+        self,
+        in_chs: int,
+        hidden_channels: Optional[int] = None,
+        out_chs: Optional[int] = None,
+        act_layer: nn.Module = nn.GELU,
+        drop: float = 0.0,
     ) -> None:
         """Build convolutional FFN module.
 
@@ -771,11 +786,11 @@ class RepConditionalPosEnc(nn.Module):
     """
 
     def __init__(
-            self,
-            dim: int,
-            dim_out: Optional[int] = None,
-            spatial_shape: Union[int, Tuple[int, int]] = (7, 7),
-            inference_mode=False,
+        self,
+        dim: int,
+        dim_out: Optional[int] = None,
+        spatial_shape: Union[int, Tuple[int, int]] = (7, 7),
+        inference_mode=False,
     ) -> None:
         """Build reparameterizable conditional positional encoding
 
@@ -871,7 +886,7 @@ class RepConditionalPosEnc(nn.Module):
         self.reparam_conv.bias.data = b_final
 
         for name, para in self.named_parameters():
-            if 'reparam_conv' in name:
+            if "reparam_conv" in name:
                 continue
             para.detach_()
         self.__delattr__("pos_enc")
@@ -885,15 +900,15 @@ class RepMixerBlock(nn.Module):
     """
 
     def __init__(
-            self,
-            dim: int,
-            kernel_size: int = 3,
-            mlp_ratio: float = 4.0,
-            act_layer: nn.Module = nn.GELU,
-            proj_drop: float = 0.0,
-            drop_path: float = 0.0,
-            layer_scale_init_value: float = 1e-5,
-            inference_mode: bool = False,
+        self,
+        dim: int,
+        kernel_size: int = 3,
+        mlp_ratio: float = 4.0,
+        act_layer: nn.Module = nn.GELU,
+        proj_drop: float = 0.0,
+        drop_path: float = 0.0,
+        layer_scale_init_value: float = 1e-5,
+        inference_mode: bool = False,
     ):
         """Build RepMixer Block.
 
@@ -943,14 +958,14 @@ class AttentionBlock(nn.Module):
     """
 
     def __init__(
-            self,
-            dim: int,
-            mlp_ratio: float = 4.0,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.BatchNorm2d,
-            proj_drop: float = 0.0,
-            drop_path: float = 0.0,
-            layer_scale_init_value: float = 1e-5,
+        self,
+        dim: int,
+        mlp_ratio: float = 4.0,
+        act_layer: nn.Module = nn.GELU,
+        norm_layer: nn.Module = nn.BatchNorm2d,
+        proj_drop: float = 0.0,
+        drop_path: float = 0.0,
+        layer_scale_init_value: float = 1e-5,
     ):
         """Build Attention Block.
 
@@ -994,25 +1009,25 @@ class AttentionBlock(nn.Module):
 
 class FastVitStage(nn.Module):
     def __init__(
-            self,
-            dim: int,
-            dim_out: int,
-            depth: int,
-            token_mixer_type: str,
-            downsample: bool = True,
-            se_downsample: bool = False,
-            down_patch_size: int = 7,
-            down_stride: int = 2,
-            pos_emb_layer: Optional[nn.Module] = None,
-            kernel_size: int = 3,
-            mlp_ratio: float = 4.0,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.BatchNorm2d,
-            proj_drop_rate: float = 0.0,
-            drop_path_rate: float = 0.0,
-            layer_scale_init_value: Optional[float] = 1e-5,
-            lkc_use_act=False,
-            inference_mode=False,
+        self,
+        dim: int,
+        dim_out: int,
+        depth: int,
+        token_mixer_type: str,
+        downsample: bool = True,
+        se_downsample: bool = False,
+        down_patch_size: int = 7,
+        down_stride: int = 2,
+        pos_emb_layer: Optional[nn.Module] = None,
+        kernel_size: int = 3,
+        mlp_ratio: float = 4.0,
+        act_layer: nn.Module = nn.GELU,
+        norm_layer: nn.Module = nn.BatchNorm2d,
+        proj_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+        layer_scale_init_value: Optional[float] = 1e-5,
+        lkc_use_act=False,
+        inference_mode=False,
     ):
         """FastViT stage.
 
@@ -1055,26 +1070,30 @@ class FastVitStage(nn.Module):
         blocks = []
         for block_idx in range(depth):
             if token_mixer_type == "repmixer":
-                blocks.append(RepMixerBlock(
-                    dim_out,
-                    kernel_size=kernel_size,
-                    mlp_ratio=mlp_ratio,
-                    act_layer=act_layer,
-                    proj_drop=proj_drop_rate,
-                    drop_path=drop_path_rate[block_idx],
-                    layer_scale_init_value=layer_scale_init_value,
-                    inference_mode=inference_mode,
-                ))
+                blocks.append(
+                    RepMixerBlock(
+                        dim_out,
+                        kernel_size=kernel_size,
+                        mlp_ratio=mlp_ratio,
+                        act_layer=act_layer,
+                        proj_drop=proj_drop_rate,
+                        drop_path=drop_path_rate[block_idx],
+                        layer_scale_init_value=layer_scale_init_value,
+                        inference_mode=inference_mode,
+                    )
+                )
             elif token_mixer_type == "attention":
-                blocks.append(AttentionBlock(
-                    dim_out,
-                    mlp_ratio=mlp_ratio,
-                    act_layer=act_layer,
-                    norm_layer=norm_layer,
-                    proj_drop=proj_drop_rate,
-                    drop_path=drop_path_rate[block_idx],
-                    layer_scale_init_value=layer_scale_init_value,
-                ))
+                blocks.append(
+                    AttentionBlock(
+                        dim_out,
+                        mlp_ratio=mlp_ratio,
+                        act_layer=act_layer,
+                        norm_layer=norm_layer,
+                        proj_drop=proj_drop_rate,
+                        drop_path=drop_path_rate[block_idx],
+                        layer_scale_init_value=layer_scale_init_value,
+                    )
+                )
             else:
                 raise ValueError(
                     "Token mixer type: {} not supported".format(token_mixer_type)
@@ -1099,30 +1118,35 @@ class FastVit(nn.Module):
     """
 
     def __init__(
-            self,
-            in_chans: int = 3,
-            layers: Tuple[int, ...] = (2, 2, 6, 2),
-            token_mixers: Tuple[str, ...] = ("repmixer", "repmixer", "repmixer", "repmixer"),
-            embed_dims: Tuple[int, ...] = (64, 128, 256, 512),
-            mlp_ratios: Tuple[float, ...] = (4,) * 4,
-            downsamples: Tuple[bool, ...] = (False, True, True, True),
-            se_downsamples: Tuple[bool, ...] = (False, False, False, False),
-            repmixer_kernel_size: int = 3,
-            num_classes: int = 1000,
-            pos_embs: Tuple[Optional[nn.Module], ...] = (None,) * 4,
-            down_patch_size: int = 7,
-            down_stride: int = 2,
-            drop_rate: float = 0.0,
-            proj_drop_rate: float = 0.0,
-            drop_path_rate: float = 0.0,
-            layer_scale_init_value: float = 1e-5,
-            lkc_use_act: bool = False,
-            fork_feat: bool = False,
-            cls_ratio: float = 2.0,
-            global_pool: str = 'avg',
-            norm_layer: nn.Module = nn.BatchNorm2d,
-            act_layer: nn.Module = nn.GELU,
-            inference_mode: bool = False,
+        self,
+        in_chans: int = 3,
+        layers: Tuple[int, ...] = (2, 2, 6, 2),
+        token_mixers: Tuple[str, ...] = (
+            "repmixer",
+            "repmixer",
+            "repmixer",
+            "repmixer",
+        ),
+        embed_dims: Tuple[int, ...] = (64, 128, 256, 512),
+        mlp_ratios: Tuple[float, ...] = (4,) * 4,
+        downsamples: Tuple[bool, ...] = (False, True, True, True),
+        se_downsamples: Tuple[bool, ...] = (False, False, False, False),
+        repmixer_kernel_size: int = 3,
+        num_classes: int = 1000,
+        pos_embs: Tuple[Optional[nn.Module], ...] = (None,) * 4,
+        down_patch_size: int = 7,
+        down_stride: int = 2,
+        drop_rate: float = 0.0,
+        proj_drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+        layer_scale_init_value: float = 1e-5,
+        lkc_use_act: bool = False,
+        fork_feat: bool = False,
+        cls_ratio: float = 2.0,
+        global_pool: str = "avg",
+        norm_layer: nn.Module = nn.BatchNorm2d,
+        act_layer: nn.Module = nn.GELU,
+        inference_mode: bool = False,
     ) -> None:
         super().__init__()
         self.num_classes = 0 if fork_feat else num_classes
@@ -1141,7 +1165,10 @@ class FastVit(nn.Module):
         # Build the main stages of the network architecture
         prev_dim = embed_dims[0]
         scale = 1
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers)).split(layers)]
+        dpr = [
+            x.tolist()
+            for x in torch.linspace(0, drop_path_rate, sum(layers)).split(layers)
+        ]
         stages = []
         for i in range(len(layers)):
             downsample = downsamples[i] or prev_dim != embed_dims[i]
@@ -1169,7 +1196,9 @@ class FastVit(nn.Module):
             prev_dim = embed_dims[i]
             if downsample:
                 scale *= 2
-            self.feature_info += [dict(num_chs=prev_dim, reduction=4 * scale, module=f'stages.{i}')]
+            self.feature_info += [
+                dict(num_chs=prev_dim, reduction=4 * scale, module=f"stages.{i}")
+            ]
         self.stages = nn.Sequential(*stages)
         self.num_stages = len(self.stages)
         self.num_features = self.head_hidden_size = prev_dim
@@ -1192,7 +1221,9 @@ class FastVit(nn.Module):
                 self.add_module(layer_name, layer)
         else:
             # Classifier head
-            self.num_features = self.head_hidden_size = final_features = int(embed_dims[-1] * cls_ratio)
+            self.num_features = self.head_hidden_size = final_features = int(
+                embed_dims[-1] * cls_ratio
+            )
             self.final_conv = MobileOneBlock(
                 in_chs=embed_dims[-1],
                 out_chs=final_features,
@@ -1227,12 +1258,16 @@ class FastVit(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         return dict(
-            stem=r'^stem',  # stem and embed
-            blocks=r'^stages\.(\d+)' if coarse else [
-                (r'^stages\.(\d+).downsample', (0,)),
-                (r'^stages\.(\d+).pos_emb', (0,)),
-                (r'^stages\.(\d+)\.\w+\.(\d+)', None),
-            ]
+            stem=r"^stem",  # stem and embed
+            blocks=(
+                r"^stages\.(\d+)"
+                if coarse
+                else [
+                    (r"^stages\.(\d+).downsample", (0,)),
+                    (r"^stages\.(\d+).pos_emb", (0,)),
+                    (r"^stages\.(\d+)\.\w+\.(\d+)", None),
+                ]
+            ),
         )
 
     @torch.jit.ignore
@@ -1249,15 +1284,15 @@ class FastVit(nn.Module):
         self.head.reset(num_classes, global_pool)
 
     def forward_intermediates(
-            self,
-            x: torch.Tensor,
-            indices: Optional[Union[int, List[int], Tuple[int]]] = None,
-            norm: bool = False,
-            stop_early: bool = False,
-            output_fmt: str = 'NCHW',
-            intermediates_only: bool = False,
+        self,
+        x: torch.Tensor,
+        indices: Optional[Union[int, List[int], Tuple[int]]] = None,
+        norm: bool = False,
+        stop_early: bool = False,
+        output_fmt: str = "NCHW",
+        intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
-        """ Forward features that returns intermediates.
+        """Forward features that returns intermediates.
 
         Args:
             x: Input image tensor
@@ -1269,17 +1304,19 @@ class FastVit(nn.Module):
         Returns:
 
         """
-        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        assert output_fmt in ("NCHW",), "Output shape must be NCHW."
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
 
         # forward pass
         x = self.stem(x)
         last_idx = self.num_stages - 1
-        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+        if (
+            torch.jit.is_scripting() or not stop_early
+        ):  # can't slice blocks in torchscript
             stages = self.stages
         else:
-            stages = self.stages[:max_index + 1]
+            stages = self.stages[: max_index + 1]
         feat_idx = 0
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
@@ -1295,17 +1332,16 @@ class FastVit(nn.Module):
         return x, intermediates
 
     def prune_intermediate_layers(
-            self,
-            indices: Union[int, List[int], Tuple[int]] = 1,
-            prune_norm: bool = False,
-            prune_head: bool = True,
+        self,
+        indices: Union[int, List[int], Tuple[int]] = 1,
+        prune_norm: bool = False,
+        prune_head: bool = True,
     ):
-        """ Prune layers not required for specified intermediates.
-        """
+        """Prune layers not required for specified intermediates."""
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
-        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        self.stages = self.stages[: max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_head:
-            self.reset_classifier(0, '')
+            self.reset_classifier(0, "")
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
@@ -1346,85 +1382,75 @@ def _cfg(url="", **kwargs):
         "interpolation": "bicubic",
         "mean": IMAGENET_DEFAULT_MEAN,
         "std": IMAGENET_DEFAULT_STD,
-        'first_conv': ('stem.0.conv_kxk.0.conv', 'stem.0.conv_scale.conv'),
+        "first_conv": ("stem.0.conv_kxk.0.conv", "stem.0.conv_scale.conv"),
         "classifier": "head.fc",
         **kwargs,
     }
 
 
-default_cfgs = generate_default_cfgs({
-    "fastvit_t8.apple_in1k": _cfg(
-        hf_hub_id='timm/'),
-    "fastvit_t12.apple_in1k": _cfg(
-        hf_hub_id='timm/'),
-
-    "fastvit_s12.apple_in1k": _cfg(
-        hf_hub_id='timm/'),
-    "fastvit_sa12.apple_in1k": _cfg(
-        hf_hub_id='timm/'),
-    "fastvit_sa24.apple_in1k": _cfg(
-        hf_hub_id='timm/'),
-    "fastvit_sa36.apple_in1k": _cfg(
-        hf_hub_id='timm/'),
-
-    "fastvit_ma36.apple_in1k": _cfg(
-        hf_hub_id='timm/',
-        crop_pct=0.95),
-
-    "fastvit_t8.apple_dist_in1k": _cfg(
-        hf_hub_id='timm/'),
-    "fastvit_t12.apple_dist_in1k": _cfg(
-        hf_hub_id='timm/'),
-
-    "fastvit_s12.apple_dist_in1k": _cfg(
-        hf_hub_id='timm/',),
-    "fastvit_sa12.apple_dist_in1k": _cfg(
-        hf_hub_id='timm/',),
-    "fastvit_sa24.apple_dist_in1k": _cfg(
-        hf_hub_id='timm/',),
-    "fastvit_sa36.apple_dist_in1k": _cfg(
-        hf_hub_id='timm/',),
-
-    "fastvit_ma36.apple_dist_in1k": _cfg(
-        hf_hub_id='timm/',
-        crop_pct=0.95
-    ),
-
-    "fastvit_mci0.apple_mclip": _cfg(
-        hf_hub_id='apple/mobileclip_s0_timm',
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s0.pt',
-        crop_pct=0.95,
-        num_classes=512,  # CLIP proj dim
-        mean=(0., 0., 0.), std=(1., 1., 1.)
-    ),
-    "fastvit_mci1.apple_mclip": _cfg(
-        hf_hub_id='apple/mobileclip_s1_timm',
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s1.pt',
-        crop_pct=0.95,
-        num_classes=512,  # CLIP proj dim
-        mean=(0., 0., 0.), std=(1., 1., 1.)
-    ),
-    "fastvit_mci2.apple_mclip": _cfg(
-        hf_hub_id='apple/mobileclip_s2_timm',
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s2.pt',
-        crop_pct=0.95,
-        num_classes=512,  # CLIP proj dim
-        mean=(0., 0., 0.), std=(1., 1., 1.)
-    ),
-})
+default_cfgs = generate_default_cfgs(
+    {
+        "fastvit_t8.apple_in1k": _cfg(hf_hub_id="timm/"),
+        "fastvit_t12.apple_in1k": _cfg(hf_hub_id="timm/"),
+        "fastvit_s12.apple_in1k": _cfg(hf_hub_id="timm/"),
+        "fastvit_sa12.apple_in1k": _cfg(hf_hub_id="timm/"),
+        "fastvit_sa24.apple_in1k": _cfg(hf_hub_id="timm/"),
+        "fastvit_sa36.apple_in1k": _cfg(hf_hub_id="timm/"),
+        "fastvit_ma36.apple_in1k": _cfg(hf_hub_id="timm/", crop_pct=0.95),
+        "fastvit_t8.apple_dist_in1k": _cfg(hf_hub_id="timm/"),
+        "fastvit_t12.apple_dist_in1k": _cfg(hf_hub_id="timm/"),
+        "fastvit_s12.apple_dist_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "fastvit_sa12.apple_dist_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "fastvit_sa24.apple_dist_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "fastvit_sa36.apple_dist_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "fastvit_ma36.apple_dist_in1k": _cfg(hf_hub_id="timm/", crop_pct=0.95),
+        "fastvit_mci0.apple_mclip": _cfg(
+            hf_hub_id="apple/mobileclip_s0_timm",
+            url="https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s0.pt",
+            crop_pct=0.95,
+            num_classes=512,  # CLIP proj dim
+            mean=(0.0, 0.0, 0.0),
+            std=(1.0, 1.0, 1.0),
+        ),
+        "fastvit_mci1.apple_mclip": _cfg(
+            hf_hub_id="apple/mobileclip_s1_timm",
+            url="https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s1.pt",
+            crop_pct=0.95,
+            num_classes=512,  # CLIP proj dim
+            mean=(0.0, 0.0, 0.0),
+            std=(1.0, 1.0, 1.0),
+        ),
+        "fastvit_mci2.apple_mclip": _cfg(
+            hf_hub_id="apple/mobileclip_s2_timm",
+            url="https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s2.pt",
+            crop_pct=0.95,
+            num_classes=512,  # CLIP proj dim
+            mean=(0.0, 0.0, 0.0),
+            std=(1.0, 1.0, 1.0),
+        ),
+    }
+)
 
 
 def checkpoint_filter_fn(state_dict, model):
-    """ Remap original checkpoints -> timm """
-    if 'stem.0.conv_kxk.0.conv.weight' in state_dict:
+    """Remap original checkpoints -> timm"""
+    if "stem.0.conv_kxk.0.conv.weight" in state_dict:
         return state_dict  # non-original checkpoint, no remapping needed
 
-    state_dict = state_dict.get('state_dict', state_dict)
-    if 'image_encoder.model.patch_embed.0.rbr_conv.0.conv.weight' in state_dict:
+    state_dict = state_dict.get("state_dict", state_dict)
+    if "image_encoder.model.patch_embed.0.rbr_conv.0.conv.weight" in state_dict:
         # remap MobileCLIP checkpoints
-        prefix = 'image_encoder.model.'
+        prefix = "image_encoder.model."
     else:
-        prefix = ''
+        prefix = ""
 
     import re
     import bisect
@@ -1432,7 +1458,7 @@ def checkpoint_filter_fn(state_dict, model):
     # find stage ends by locating downsample layers
     stage_ends = []
     for k, v in state_dict.items():
-        match = re.match(r'^(.*?)network\.(\d+)\.proj.*', k)
+        match = re.match(r"^(.*?)network\.(\d+)\.proj.*", k)
         if match:
             stage_ends.append(int(match.group(2)))
     stage_ends = list(sorted(set(stage_ends)))
@@ -1442,60 +1468,64 @@ def checkpoint_filter_fn(state_dict, model):
         if prefix:
             if prefix not in k:
                 continue
-            k = k.replace(prefix, '')
+            k = k.replace(prefix, "")
 
         # remap renamed layers
-        k = k.replace('patch_embed', 'stem')
-        k = k.replace('rbr_conv', 'conv_kxk')
-        k = k.replace('rbr_scale', 'conv_scale')
-        k = k.replace('rbr_skip', 'identity')
-        k = k.replace('conv_exp', 'final_conv')  # to match byobnet, regnet, nfnet
-        k = k.replace('lkb_origin', 'large_conv')
-        k = k.replace('convffn', 'mlp')
-        k = k.replace('se.reduce', 'se.fc1')
-        k = k.replace('se.expand', 'se.fc2')
-        k = re.sub(r'layer_scale_([0-9])', r'layer_scale_\1.gamma', k)
-        if k.endswith('layer_scale'):
-            k = k.replace('layer_scale', 'layer_scale.gamma')
-        k = k.replace('dist_head', 'head_dist')
-        if k.startswith('head.'):
-            if k == 'head.proj' and hasattr(model.head, 'fc') and isinstance(model.head.fc, nn.Linear):
+        k = k.replace("patch_embed", "stem")
+        k = k.replace("rbr_conv", "conv_kxk")
+        k = k.replace("rbr_scale", "conv_scale")
+        k = k.replace("rbr_skip", "identity")
+        k = k.replace("conv_exp", "final_conv")  # to match byobnet, regnet, nfnet
+        k = k.replace("lkb_origin", "large_conv")
+        k = k.replace("convffn", "mlp")
+        k = k.replace("se.reduce", "se.fc1")
+        k = k.replace("se.expand", "se.fc2")
+        k = re.sub(r"layer_scale_([0-9])", r"layer_scale_\1.gamma", k)
+        if k.endswith("layer_scale"):
+            k = k.replace("layer_scale", "layer_scale.gamma")
+        k = k.replace("dist_head", "head_dist")
+        if k.startswith("head."):
+            if (
+                k == "head.proj"
+                and hasattr(model.head, "fc")
+                and isinstance(model.head.fc, nn.Linear)
+            ):
                 # if CLIP projection, map to head.fc w/ bias = zeros
-                k = k.replace('head.proj', 'head.fc.weight')
+                k = k.replace("head.proj", "head.fc.weight")
                 v = v.T
-                out_dict['head.fc.bias'] = torch.zeros(v.shape[0])
+                out_dict["head.fc.bias"] = torch.zeros(v.shape[0])
             else:
-                k = k.replace('head.', 'head.fc.')
+                k = k.replace("head.", "head.fc.")
 
         # remap flat sequential network to stages
-        match = re.match(r'^network\.(\d+)', k)
+        match = re.match(r"^network\.(\d+)", k)
         stage_idx, net_idx = None, None
         if match:
             net_idx = int(match.group(1))
             stage_idx = bisect.bisect_right(stage_ends, net_idx)
         if stage_idx is not None:
-            net_prefix = f'network.{net_idx}'
-            stage_prefix = f'stages.{stage_idx}'
-            if net_prefix + '.proj' in k:
-                k = k.replace(net_prefix + '.proj', stage_prefix + '.downsample.proj')
-            elif net_prefix + '.pe' in k:
-                k = k.replace(net_prefix + '.pe', stage_prefix + '.pos_emb.pos_enc')
+            net_prefix = f"network.{net_idx}"
+            stage_prefix = f"stages.{stage_idx}"
+            if net_prefix + ".proj" in k:
+                k = k.replace(net_prefix + ".proj", stage_prefix + ".downsample.proj")
+            elif net_prefix + ".pe" in k:
+                k = k.replace(net_prefix + ".pe", stage_prefix + ".pos_emb.pos_enc")
             else:
-                k = k.replace(net_prefix, stage_prefix + '.blocks')
+                k = k.replace(net_prefix, stage_prefix + ".blocks")
 
         out_dict[k] = v
     return out_dict
 
 
 def _create_fastvit(variant, pretrained=False, **kwargs):
-    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3))
+    out_indices = kwargs.pop("out_indices", (0, 1, 2, 3))
     model = build_model_with_cfg(
         FastVit,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
-        **kwargs
+        **kwargs,
     )
     return model
 
@@ -1507,9 +1537,11 @@ def fastvit_t8(pretrained=False, **kwargs):
         layers=(2, 2, 4, 2),
         embed_dims=(48, 96, 192, 384),
         mlp_ratios=(3, 3, 3, 3),
-        token_mixers=("repmixer", "repmixer", "repmixer", "repmixer")
+        token_mixers=("repmixer", "repmixer", "repmixer", "repmixer"),
     )
-    return _create_fastvit('fastvit_t8', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_t8", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1521,7 +1553,9 @@ def fastvit_t12(pretrained=False, **kwargs):
         mlp_ratios=(3, 3, 3, 3),
         token_mixers=("repmixer", "repmixer", "repmixer", "repmixer"),
     )
-    return _create_fastvit('fastvit_t12', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_t12", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1533,7 +1567,9 @@ def fastvit_s12(pretrained=False, **kwargs):
         mlp_ratios=(4, 4, 4, 4),
         token_mixers=("repmixer", "repmixer", "repmixer", "repmixer"),
     )
-    return _create_fastvit('fastvit_s12', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_s12", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1543,10 +1579,17 @@ def fastvit_sa12(pretrained=False, **kwargs):
         layers=(2, 2, 6, 2),
         embed_dims=(64, 128, 256, 512),
         mlp_ratios=(4, 4, 4, 4),
-        pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
+        pos_embs=(
+            None,
+            None,
+            None,
+            partial(RepConditionalPosEnc, spatial_shape=(7, 7)),
+        ),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
     )
-    return _create_fastvit('fastvit_sa12', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_sa12", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1556,10 +1599,17 @@ def fastvit_sa24(pretrained=False, **kwargs):
         layers=(4, 4, 12, 4),
         embed_dims=(64, 128, 256, 512),
         mlp_ratios=(4, 4, 4, 4),
-        pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
+        pos_embs=(
+            None,
+            None,
+            None,
+            partial(RepConditionalPosEnc, spatial_shape=(7, 7)),
+        ),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
     )
-    return _create_fastvit('fastvit_sa24', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_sa24", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1569,10 +1619,17 @@ def fastvit_sa36(pretrained=False, **kwargs):
         layers=(6, 6, 18, 6),
         embed_dims=(64, 128, 256, 512),
         mlp_ratios=(4, 4, 4, 4),
-        pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
+        pos_embs=(
+            None,
+            None,
+            None,
+            partial(RepConditionalPosEnc, spatial_shape=(7, 7)),
+        ),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
     )
-    return _create_fastvit('fastvit_sa36', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_sa36", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1582,10 +1639,17 @@ def fastvit_ma36(pretrained=False, **kwargs):
         layers=(6, 6, 18, 6),
         embed_dims=(76, 152, 304, 608),
         mlp_ratios=(4, 4, 4, 4),
-        pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
-        token_mixers=("repmixer", "repmixer", "repmixer", "attention")
+        pos_embs=(
+            None,
+            None,
+            None,
+            partial(RepConditionalPosEnc, spatial_shape=(7, 7)),
+        ),
+        token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
     )
-    return _create_fastvit('fastvit_ma36', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_ma36", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1596,11 +1660,18 @@ def fastvit_mci0(pretrained=False, **kwargs):
         embed_dims=(64, 128, 256, 512),
         mlp_ratios=(3, 3, 3, 3),
         se_downsamples=(False, False, True, True),
-        pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
+        pos_embs=(
+            None,
+            None,
+            None,
+            partial(RepConditionalPosEnc, spatial_shape=(7, 7)),
+        ),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
         lkc_use_act=True,
     )
-    return _create_fastvit('fastvit_mci0', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_mci0", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1611,11 +1682,18 @@ def fastvit_mci1(pretrained=False, **kwargs):
         embed_dims=(64, 128, 256, 512),
         mlp_ratios=(3, 3, 3, 3),
         se_downsamples=(False, False, True, True),
-        pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
+        pos_embs=(
+            None,
+            None,
+            None,
+            partial(RepConditionalPosEnc, spatial_shape=(7, 7)),
+        ),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
         lkc_use_act=True,
     )
-    return _create_fastvit('fastvit_mci1', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_mci1", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -1626,8 +1704,15 @@ def fastvit_mci2(pretrained=False, **kwargs):
         embed_dims=(80, 160, 320, 640),
         mlp_ratios=(3, 3, 3, 3),
         se_downsamples=(False, False, True, True),
-        pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
+        pos_embs=(
+            None,
+            None,
+            None,
+            partial(RepConditionalPosEnc, spatial_shape=(7, 7)),
+        ),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
         lkc_use_act=True,
     )
-    return _create_fastvit('fastvit_mci2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_fastvit(
+        "fastvit_mci2", pretrained=pretrained, **dict(model_args, **kwargs)
+    )

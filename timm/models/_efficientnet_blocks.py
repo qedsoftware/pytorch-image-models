@@ -2,18 +2,36 @@
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
+
 from typing import Callable, Dict, Optional, Type
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from timm.layers import create_conv2d, DropPath, make_divisible, create_act_layer, create_aa, to_2tuple, LayerType,\
-    ConvNormAct, get_norm_act_layer, MultiQueryAttention2d, Attention2d
+from timm.layers import (
+    create_conv2d,
+    DropPath,
+    make_divisible,
+    create_act_layer,
+    create_aa,
+    to_2tuple,
+    LayerType,
+    ConvNormAct,
+    get_norm_act_layer,
+    MultiQueryAttention2d,
+    Attention2d,
+)
 
 __all__ = [
-    'SqueezeExcite', 'ConvBnAct', 'DepthwiseSeparableConv', 'InvertedResidual', 'CondConvResidual', 'EdgeResidual',
-    'UniversalInvertedResidual', 'MobileAttention'
+    "SqueezeExcite",
+    "ConvBnAct",
+    "DepthwiseSeparableConv",
+    "InvertedResidual",
+    "CondConvResidual",
+    "EdgeResidual",
+    "UniversalInvertedResidual",
+    "MobileAttention",
 ]
 
 ModuleType = Type[nn.Module]
@@ -29,7 +47,7 @@ def num_groups(group_size: Optional[int], channels: int):
 
 
 class SqueezeExcite(nn.Module):
-    """ Squeeze-and-Excitation w/ specific features for EfficientNet/MobileNet family
+    """Squeeze-and-Excitation w/ specific features for EfficientNet/MobileNet family
 
     Args:
         in_chs (int): input channels to layer
@@ -41,14 +59,14 @@ class SqueezeExcite(nn.Module):
     """
 
     def __init__(
-            self,
-            in_chs: int,
-            rd_ratio: float = 0.25,
-            rd_channels: Optional[int] = None,
-            act_layer: LayerType = nn.ReLU,
-            gate_layer: LayerType = nn.Sigmoid,
-            force_act_layer: Optional[LayerType] = None,
-            rd_round_fn: Optional[Callable] = None,
+        self,
+        in_chs: int,
+        rd_ratio: float = 0.25,
+        rd_channels: Optional[int] = None,
+        act_layer: LayerType = nn.ReLU,
+        gate_layer: LayerType = nn.Sigmoid,
+        force_act_layer: Optional[LayerType] = None,
+        rd_round_fn: Optional[Callable] = None,
     ):
         super(SqueezeExcite, self).__init__()
         if rd_channels is None:
@@ -69,22 +87,22 @@ class SqueezeExcite(nn.Module):
 
 
 class ConvBnAct(nn.Module):
-    """ Conv + Norm Layer + Activation w/ optional skip connection
-    """
+    """Conv + Norm Layer + Activation w/ optional skip connection"""
+
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            kernel_size: int,
-            stride: int = 1,
-            dilation: int = 1,
-            group_size: int = 0,
-            pad_type: str = '',
-            skip: bool = False,
-            act_layer: LayerType = nn.ReLU,
-            norm_layer: LayerType = nn.BatchNorm2d,
-            aa_layer: Optional[LayerType] = None,
-            drop_path_rate: float = 0.,
+        self,
+        in_chs: int,
+        out_chs: int,
+        kernel_size: int,
+        stride: int = 1,
+        dilation: int = 1,
+        group_size: int = 0,
+        pad_type: str = "",
+        skip: bool = False,
+        act_layer: LayerType = nn.ReLU,
+        norm_layer: LayerType = nn.BatchNorm2d,
+        aa_layer: Optional[LayerType] = None,
+        drop_path_rate: float = 0.0,
     ):
         super(ConvBnAct, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
@@ -93,18 +111,25 @@ class ConvBnAct(nn.Module):
         use_aa = aa_layer is not None and stride > 1  # FIXME handle dilation
 
         self.conv = create_conv2d(
-            in_chs, out_chs, kernel_size,
+            in_chs,
+            out_chs,
+            kernel_size,
             stride=1 if use_aa else stride,
-            dilation=dilation, groups=groups, padding=pad_type)
+            dilation=dilation,
+            groups=groups,
+            padding=pad_type,
+        )
         self.bn1 = norm_act_layer(out_chs, inplace=True)
         self.aa = create_aa(aa_layer, channels=out_chs, stride=stride, enable=use_aa)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate else nn.Identity()
 
     def feature_info(self, location):
-        if location == 'expansion':  # output of conv after act, same as block coutput
-            return dict(module='bn1', hook_type='forward', num_chs=self.conv.out_channels)
+        if location == "expansion":  # output of conv after act, same as block coutput
+            return dict(
+                module="bn1", hook_type="forward", num_chs=self.conv.out_channels
+            )
         else:  # location == 'bottleneck', block output
-            return dict(module='', num_chs=self.conv.out_channels)
+            return dict(module="", num_chs=self.conv.out_channels)
 
     def forward(self, x):
         shortcut = x
@@ -117,28 +142,29 @@ class ConvBnAct(nn.Module):
 
 
 class DepthwiseSeparableConv(nn.Module):
-    """ Depthwise-separable block
+    """Depthwise-separable block
     Used for DS convs in MobileNet-V1 and in the place of IR blocks that have no expansion
     (factor of 1.0). This is an alternative to having a IR with an optional first pw conv.
     """
+
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            dw_kernel_size: int = 3,
-            stride: int = 1,
-            dilation: int = 1,
-            group_size: int = 1,
-            pad_type: str = '',
-            noskip: bool = False,
-            pw_kernel_size: int = 1,
-            pw_act: bool = False,
-            s2d: int = 0,
-            act_layer: LayerType = nn.ReLU,
-            norm_layer: LayerType = nn.BatchNorm2d,
-            aa_layer: Optional[LayerType] = None,
-            se_layer: Optional[ModuleType] = None,
-            drop_path_rate: float = 0.,
+        self,
+        in_chs: int,
+        out_chs: int,
+        dw_kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        group_size: int = 1,
+        pad_type: str = "",
+        noskip: bool = False,
+        pw_kernel_size: int = 1,
+        pw_act: bool = False,
+        s2d: int = 0,
+        act_layer: LayerType = nn.ReLU,
+        norm_layer: LayerType = nn.BatchNorm2d,
+        aa_layer: Optional[LayerType] = None,
+        se_layer: Optional[ModuleType] = None,
+        drop_path_rate: float = 0.0,
     ):
         super(DepthwiseSeparableConv, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
@@ -149,10 +175,12 @@ class DepthwiseSeparableConv(nn.Module):
         # Space to depth
         if s2d == 1:
             sd_chs = int(in_chs * 4)
-            self.conv_s2d = create_conv2d(in_chs, sd_chs, kernel_size=2, stride=2, padding='same')
+            self.conv_s2d = create_conv2d(
+                in_chs, sd_chs, kernel_size=2, stride=2, padding="same"
+            )
             self.bn_s2d = norm_act_layer(sd_chs, sd_chs)
             dw_kernel_size = (dw_kernel_size + 1) // 2
-            dw_pad_type = 'same' if dw_kernel_size == 2 else pad_type
+            dw_pad_type = "same" if dw_kernel_size == 2 else pad_type
             in_chs = sd_chs
             use_aa = False  # disable AA
         else:
@@ -163,9 +191,14 @@ class DepthwiseSeparableConv(nn.Module):
         groups = num_groups(group_size, in_chs)
 
         self.conv_dw = create_conv2d(
-            in_chs, in_chs, dw_kernel_size,
+            in_chs,
+            in_chs,
+            dw_kernel_size,
             stride=1 if use_aa else stride,
-            dilation=dilation, padding=dw_pad_type, groups=groups)
+            dilation=dilation,
+            padding=dw_pad_type,
+            groups=groups,
+        )
         self.bn1 = norm_act_layer(in_chs, inplace=True)
         self.aa = create_aa(aa_layer, channels=out_chs, stride=stride, enable=use_aa)
 
@@ -177,10 +210,14 @@ class DepthwiseSeparableConv(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate else nn.Identity()
 
     def feature_info(self, location):
-        if location == 'expansion':  # after SE, input to PW
-            return dict(module='conv_pw', hook_type='forward_pre', num_chs=self.conv_pw.in_channels)
+        if location == "expansion":  # after SE, input to PW
+            return dict(
+                module="conv_pw",
+                hook_type="forward_pre",
+                num_chs=self.conv_pw.in_channels,
+            )
         else:  # location == 'bottleneck', block output
-            return dict(module='', num_chs=self.conv_pw.out_channels)
+            return dict(module="", num_chs=self.conv_pw.out_channels)
 
     def forward(self, x):
         shortcut = x
@@ -199,7 +236,7 @@ class DepthwiseSeparableConv(nn.Module):
 
 
 class InvertedResidual(nn.Module):
-    """ Inverted residual block w/ optional SE
+    """Inverted residual block w/ optional SE
 
     Originally used in MobileNet-V2 - https://arxiv.org/abs/1801.04381v4, this layer is often
     referred to as 'MBConv' for (Mobile inverted bottleneck conv) and is also used in
@@ -209,25 +246,25 @@ class InvertedResidual(nn.Module):
     """
 
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            dw_kernel_size: int = 3,
-            stride: int = 1,
-            dilation: int = 1,
-            group_size: int = 1,
-            pad_type: str = '',
-            noskip: bool = False,
-            exp_ratio: float = 1.0,
-            exp_kernel_size: int = 1,
-            pw_kernel_size: int = 1,
-            s2d: int = 0,
-            act_layer: LayerType = nn.ReLU,
-            norm_layer: LayerType = nn.BatchNorm2d,
-            aa_layer: Optional[LayerType] = None,
-            se_layer: Optional[ModuleType] = None,
-            conv_kwargs: Optional[Dict] = None,
-            drop_path_rate: float = 0.,
+        self,
+        in_chs: int,
+        out_chs: int,
+        dw_kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        group_size: int = 1,
+        pad_type: str = "",
+        noskip: bool = False,
+        exp_ratio: float = 1.0,
+        exp_kernel_size: int = 1,
+        pw_kernel_size: int = 1,
+        s2d: int = 0,
+        act_layer: LayerType = nn.ReLU,
+        norm_layer: LayerType = nn.BatchNorm2d,
+        aa_layer: Optional[LayerType] = None,
+        se_layer: Optional[ModuleType] = None,
+        conv_kwargs: Optional[Dict] = None,
+        drop_path_rate: float = 0.0,
     ):
         super(InvertedResidual, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
@@ -238,10 +275,12 @@ class InvertedResidual(nn.Module):
         # Space to depth
         if s2d == 1:
             sd_chs = int(in_chs * 4)
-            self.conv_s2d = create_conv2d(in_chs, sd_chs, kernel_size=2, stride=2, padding='same')
+            self.conv_s2d = create_conv2d(
+                in_chs, sd_chs, kernel_size=2, stride=2, padding="same"
+            )
             self.bn_s2d = norm_act_layer(sd_chs, sd_chs)
             dw_kernel_size = (dw_kernel_size + 1) // 2
-            dw_pad_type = 'same' if dw_kernel_size == 2 else pad_type
+            dw_pad_type = "same" if dw_kernel_size == 2 else pad_type
             in_chs = sd_chs
             use_aa = False  # disable AA
         else:
@@ -253,14 +292,22 @@ class InvertedResidual(nn.Module):
         groups = num_groups(group_size, mid_chs)
 
         # Point-wise expansion
-        self.conv_pw = create_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type, **conv_kwargs)
+        self.conv_pw = create_conv2d(
+            in_chs, mid_chs, exp_kernel_size, padding=pad_type, **conv_kwargs
+        )
         self.bn1 = norm_act_layer(mid_chs, inplace=True)
 
         # Depth-wise convolution
         self.conv_dw = create_conv2d(
-            mid_chs, mid_chs, dw_kernel_size,
+            mid_chs,
+            mid_chs,
+            dw_kernel_size,
             stride=1 if use_aa else stride,
-            dilation=dilation, groups=groups, padding=dw_pad_type, **conv_kwargs)
+            dilation=dilation,
+            groups=groups,
+            padding=dw_pad_type,
+            **conv_kwargs,
+        )
         self.bn2 = norm_act_layer(mid_chs, inplace=True)
         self.aa = create_aa(aa_layer, channels=mid_chs, stride=stride, enable=use_aa)
 
@@ -268,15 +315,21 @@ class InvertedResidual(nn.Module):
         self.se = se_layer(mid_chs, act_layer=act_layer) if se_layer else nn.Identity()
 
         # Point-wise linear projection
-        self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs)
+        self.conv_pwl = create_conv2d(
+            mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs
+        )
         self.bn3 = norm_act_layer(out_chs, apply_act=False)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate else nn.Identity()
 
     def feature_info(self, location):
-        if location == 'expansion':  # after SE, input to PWL
-            return dict(module='conv_pwl', hook_type='forward_pre', num_chs=self.conv_pwl.in_channels)
+        if location == "expansion":  # after SE, input to PWL
+            return dict(
+                module="conv_pwl",
+                hook_type="forward_pre",
+                num_chs=self.conv_pwl.in_channels,
+            )
         else:  # location == 'bottleneck', block output
-            return dict(module='', num_chs=self.conv_pwl.out_channels)
+            return dict(module="", num_chs=self.conv_pwl.out_channels)
 
     def forward(self, x):
         shortcut = x
@@ -308,32 +361,32 @@ class LayerScale2d(nn.Module):
 
 
 class UniversalInvertedResidual(nn.Module):
-    """ Universal Inverted Residual Block (aka Universal Inverted Bottleneck, UIB)
+    """Universal Inverted Residual Block (aka Universal Inverted Bottleneck, UIB)
 
     For MobileNetV4 - https://arxiv.org/abs/, referenced from
     https://github.com/tensorflow/models/blob/d93c7e932de27522b2fa3b115f58d06d6f640537/official/vision/modeling/layers/nn_blocks.py#L778
     """
 
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            dw_kernel_size_start: int = 0,
-            dw_kernel_size_mid: int = 3,
-            dw_kernel_size_end: int = 0,
-            stride: int = 1,
-            dilation: int = 1,
-            group_size: int = 1,
-            pad_type: str = '',
-            noskip: bool = False,
-            exp_ratio: float = 1.0,
-            act_layer: LayerType = nn.ReLU,
-            norm_layer: LayerType = nn.BatchNorm2d,
-            aa_layer: Optional[LayerType] = None,
-            se_layer: Optional[ModuleType] = None,
-            conv_kwargs: Optional[Dict] = None,
-            drop_path_rate: float = 0.,
-            layer_scale_init_value: Optional[float] = 1e-5,
+        self,
+        in_chs: int,
+        out_chs: int,
+        dw_kernel_size_start: int = 0,
+        dw_kernel_size_mid: int = 3,
+        dw_kernel_size_end: int = 0,
+        stride: int = 1,
+        dilation: int = 1,
+        group_size: int = 1,
+        pad_type: str = "",
+        noskip: bool = False,
+        exp_ratio: float = 1.0,
+        act_layer: LayerType = nn.ReLU,
+        norm_layer: LayerType = nn.BatchNorm2d,
+        aa_layer: Optional[LayerType] = None,
+        se_layer: Optional[ModuleType] = None,
+        conv_kwargs: Optional[Dict] = None,
+        drop_path_rate: float = 0.0,
+        layer_scale_init_value: Optional[float] = 1e-5,
     ):
         super(UniversalInvertedResidual, self).__init__()
         conv_kwargs = conv_kwargs or {}
@@ -346,7 +399,9 @@ class UniversalInvertedResidual(nn.Module):
             dw_start_stride = stride if not dw_kernel_size_mid else 1
             dw_start_groups = num_groups(group_size, in_chs)
             self.dw_start = ConvNormAct(
-                in_chs, in_chs, dw_kernel_size_start,
+                in_chs,
+                in_chs,
+                dw_kernel_size_start,
                 stride=dw_start_stride,
                 dilation=dilation,  # FIXME
                 groups=dw_start_groups,
@@ -363,7 +418,9 @@ class UniversalInvertedResidual(nn.Module):
         # Point-wise expansion
         mid_chs = make_divisible(in_chs * exp_ratio)
         self.pw_exp = ConvNormAct(
-            in_chs, mid_chs, 1,
+            in_chs,
+            mid_chs,
+            1,
             padding=pad_type,
             act_layer=act_layer,
             norm_layer=norm_layer,
@@ -374,7 +431,9 @@ class UniversalInvertedResidual(nn.Module):
         if dw_kernel_size_mid:
             groups = num_groups(group_size, mid_chs)
             self.dw_mid = ConvNormAct(
-                mid_chs, mid_chs, dw_kernel_size_mid,
+                mid_chs,
+                mid_chs,
+                dw_kernel_size_mid,
                 stride=stride,
                 dilation=dilation,  # FIXME
                 groups=groups,
@@ -393,7 +452,9 @@ class UniversalInvertedResidual(nn.Module):
 
         # Point-wise linear projection
         self.pw_proj = ConvNormAct(
-            mid_chs, out_chs, 1,
+            mid_chs,
+            out_chs,
+            1,
             padding=pad_type,
             apply_act=False,
             act_layer=act_layer,
@@ -402,12 +463,16 @@ class UniversalInvertedResidual(nn.Module):
         )
 
         if dw_kernel_size_end:
-            dw_end_stride = stride if not dw_kernel_size_start and not dw_kernel_size_mid else 1
+            dw_end_stride = (
+                stride if not dw_kernel_size_start and not dw_kernel_size_mid else 1
+            )
             dw_end_groups = num_groups(group_size, out_chs)
             if dw_end_stride > 1:
                 assert not aa_layer
             self.dw_end = ConvNormAct(
-                out_chs, out_chs, dw_kernel_size_end,
+                out_chs,
+                out_chs,
+                dw_kernel_size_end,
                 stride=dw_end_stride,
                 dilation=dilation,
                 groups=dw_end_groups,
@@ -427,10 +492,14 @@ class UniversalInvertedResidual(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate else nn.Identity()
 
     def feature_info(self, location):
-        if location == 'expansion':  # after SE, input to PWL
-            return dict(module='pw_proj.conv', hook_type='forward_pre', num_chs=self.pw_proj.conv.in_channels)
+        if location == "expansion":  # after SE, input to PWL
+            return dict(
+                module="pw_proj.conv",
+                hook_type="forward_pre",
+                num_chs=self.pw_proj.conv.in_channels,
+            )
         else:  # location == 'bottleneck', block output
-            return dict(module='', num_chs=self.pw_proj.conv.out_channels)
+            return dict(module="", num_chs=self.pw_proj.conv.out_channels)
 
     def forward(self, x):
         shortcut = x
@@ -447,37 +516,38 @@ class UniversalInvertedResidual(nn.Module):
 
 
 class MobileAttention(nn.Module):
-    """ Mobile Attention Block
+    """Mobile Attention Block
 
     For MobileNetV4 - https://arxiv.org/abs/, referenced from
     https://github.com/tensorflow/models/blob/d93c7e932de27522b2fa3b115f58d06d6f640537/official/vision/modeling/layers/nn_blocks.py#L1504
     """
+
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            stride: int = 1,
-            dw_kernel_size: int = 3,
-            dilation: int = 1,
-            group_size: int = 1,
-            pad_type: str = '',
-            num_heads: int = 8,
-            key_dim: int = 64,
-            value_dim: int = 64,
-            use_multi_query: bool = False,
-            query_strides: int = (1, 1),
-            kv_stride: int = 1,
-            cpe_dw_kernel_size: int = 3,
-            noskip: bool = False,
-            act_layer: LayerType = nn.ReLU,
-            norm_layer: LayerType = nn.BatchNorm2d,
-            aa_layer: Optional[LayerType] = None,
-            drop_path_rate: float = 0.,
-            attn_drop: float = 0.0,
-            proj_drop: float = 0.0,
-            layer_scale_init_value: Optional[float] = 1e-5,
-            use_bias: bool = False,
-            use_cpe: bool = False,
+        self,
+        in_chs: int,
+        out_chs: int,
+        stride: int = 1,
+        dw_kernel_size: int = 3,
+        dilation: int = 1,
+        group_size: int = 1,
+        pad_type: str = "",
+        num_heads: int = 8,
+        key_dim: int = 64,
+        value_dim: int = 64,
+        use_multi_query: bool = False,
+        query_strides: int = (1, 1),
+        kv_stride: int = 1,
+        cpe_dw_kernel_size: int = 3,
+        noskip: bool = False,
+        act_layer: LayerType = nn.ReLU,
+        norm_layer: LayerType = nn.BatchNorm2d,
+        aa_layer: Optional[LayerType] = None,
+        drop_path_rate: float = 0.0,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        layer_scale_init_value: Optional[float] = 1e-5,
+        use_bias: bool = False,
+        use_cpe: bool = False,
     ):
         super(MobileAttention, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
@@ -493,7 +563,8 @@ class MobileAttention(nn.Module):
         # 2. We replace the expensive Conv2D by a Seperable DW Conv.
         if use_cpe:
             self.conv_cpe_dw = create_conv2d(
-                in_chs, in_chs,
+                in_chs,
+                in_chs,
                 kernel_size=cpe_dw_kernel_size,
                 dilation=dilation,
                 depthwise=True,
@@ -522,7 +593,7 @@ class MobileAttention(nn.Module):
                 dw_kernel_size=dw_kernel_size,
                 attn_drop=attn_drop,
                 proj_drop=proj_drop,
-                #bias=use_bias, # why not here if used w/ mhsa?
+                # bias=use_bias, # why not here if used w/ mhsa?
             )
         else:
             self.attn = Attention2d(
@@ -542,10 +613,14 @@ class MobileAttention(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate else nn.Identity()
 
     def feature_info(self, location):
-        if location == 'expansion':  # after SE, input to PW
-            return dict(module='conv_pw', hook_type='forward_pre', num_chs=self.conv_pw.in_channels)
+        if location == "expansion":  # after SE, input to PW
+            return dict(
+                module="conv_pw",
+                hook_type="forward_pre",
+                num_chs=self.conv_pw.in_channels,
+            )
         else:  # location == 'bottleneck', block output
-            return dict(module='', num_chs=self.conv_pw.out_channels)
+            return dict(module="", num_chs=self.conv_pw.out_channels)
 
     def forward(self, x):
         if self.conv_cpe_dw is not None:
@@ -563,27 +638,27 @@ class MobileAttention(nn.Module):
 
 
 class CondConvResidual(InvertedResidual):
-    """ Inverted residual block w/ CondConv routing"""
+    """Inverted residual block w/ CondConv routing"""
 
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            dw_kernel_size: int = 3,
-            stride: int = 1,
-            dilation: int = 1,
-            group_size: int = 1,
-            pad_type: str = '',
-            noskip: bool = False,
-            exp_ratio: float = 1.0,
-            exp_kernel_size: int = 1,
-            pw_kernel_size: int = 1,
-            act_layer: LayerType = nn.ReLU,
-            norm_layer: LayerType = nn.BatchNorm2d,
-            aa_layer: Optional[LayerType] = None,
-            se_layer: Optional[ModuleType] = None,
-            num_experts: int = 0,
-            drop_path_rate: float = 0.,
+        self,
+        in_chs: int,
+        out_chs: int,
+        dw_kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        group_size: int = 1,
+        pad_type: str = "",
+        noskip: bool = False,
+        exp_ratio: float = 1.0,
+        exp_kernel_size: int = 1,
+        pw_kernel_size: int = 1,
+        act_layer: LayerType = nn.ReLU,
+        norm_layer: LayerType = nn.BatchNorm2d,
+        aa_layer: Optional[LayerType] = None,
+        se_layer: Optional[ModuleType] = None,
+        num_experts: int = 0,
+        drop_path_rate: float = 0.0,
     ):
 
         self.num_experts = num_experts
@@ -626,7 +701,7 @@ class CondConvResidual(InvertedResidual):
 
 
 class EdgeResidual(nn.Module):
-    """ Residual block with expansion convolution followed by pointwise-linear w/ stride
+    """Residual block with expansion convolution followed by pointwise-linear w/ stride
 
     Originally introduced in `EfficientNet-EdgeTPU: Creating Accelerator-Optimized Neural Networks with AutoML`
         - https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html
@@ -638,23 +713,23 @@ class EdgeResidual(nn.Module):
     """
 
     def __init__(
-            self,
-            in_chs: int,
-            out_chs: int,
-            exp_kernel_size: int = 3,
-            stride: int = 1,
-            dilation: int = 1,
-            group_size: int = 0,
-            pad_type: str = '',
-            force_in_chs: int = 0,
-            noskip: bool = False,
-            exp_ratio: float = 1.0,
-            pw_kernel_size:  int = 1,
-            act_layer: LayerType = nn.ReLU,
-            norm_layer: LayerType = nn.BatchNorm2d,
-            aa_layer: Optional[LayerType] = None,
-            se_layer: Optional[ModuleType] = None,
-            drop_path_rate: float = 0.,
+        self,
+        in_chs: int,
+        out_chs: int,
+        exp_kernel_size: int = 3,
+        stride: int = 1,
+        dilation: int = 1,
+        group_size: int = 0,
+        pad_type: str = "",
+        force_in_chs: int = 0,
+        noskip: bool = False,
+        exp_ratio: float = 1.0,
+        pw_kernel_size: int = 1,
+        act_layer: LayerType = nn.ReLU,
+        norm_layer: LayerType = nn.BatchNorm2d,
+        aa_layer: Optional[LayerType] = None,
+        se_layer: Optional[ModuleType] = None,
+        drop_path_rate: float = 0.0,
     ):
         super(EdgeResidual, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
@@ -662,15 +737,22 @@ class EdgeResidual(nn.Module):
             mid_chs = make_divisible(force_in_chs * exp_ratio)
         else:
             mid_chs = make_divisible(in_chs * exp_ratio)
-        groups = num_groups(group_size, mid_chs)  # NOTE: Using out_chs of conv_exp for groups calc
+        groups = num_groups(
+            group_size, mid_chs
+        )  # NOTE: Using out_chs of conv_exp for groups calc
         self.has_skip = (in_chs == out_chs and stride == 1) and not noskip
         use_aa = aa_layer is not None and stride > 1  # FIXME handle dilation
 
         # Expansion convolution
         self.conv_exp = create_conv2d(
-            in_chs, mid_chs, exp_kernel_size,
+            in_chs,
+            mid_chs,
+            exp_kernel_size,
             stride=1 if use_aa else stride,
-            dilation=dilation, groups=groups, padding=pad_type)
+            dilation=dilation,
+            groups=groups,
+            padding=pad_type,
+        )
         self.bn1 = norm_act_layer(mid_chs, inplace=True)
 
         self.aa = create_aa(aa_layer, channels=mid_chs, stride=stride, enable=use_aa)
@@ -679,15 +761,21 @@ class EdgeResidual(nn.Module):
         self.se = se_layer(mid_chs, act_layer=act_layer) if se_layer else nn.Identity()
 
         # Point-wise linear projection
-        self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type)
+        self.conv_pwl = create_conv2d(
+            mid_chs, out_chs, pw_kernel_size, padding=pad_type
+        )
         self.bn2 = norm_act_layer(out_chs, apply_act=False)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate else nn.Identity()
 
     def feature_info(self, location):
-        if location == 'expansion':  # after SE, before PWL
-            return dict(module='conv_pwl', hook_type='forward_pre', num_chs=self.conv_pwl.in_channels)
+        if location == "expansion":  # after SE, before PWL
+            return dict(
+                module="conv_pwl",
+                hook_type="forward_pre",
+                num_chs=self.conv_pwl.in_channels,
+            )
         else:  # location == 'bottleneck', block output
-            return dict(module='', num_chs=self.conv_pwl.out_channels)
+            return dict(module="", num_chs=self.conv_pwl.out_channels)
 
     def forward(self, x):
         shortcut = x

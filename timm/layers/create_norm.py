@@ -4,6 +4,7 @@ Create norm modules by string (to mirror create_act and creat_norm-act fns)
 
 Copyright 2022 Ross Wightman
 """
+
 import functools
 import types
 from typing import Type
@@ -47,7 +48,7 @@ def get_norm_layer(norm_layer):
     if isinstance(norm_layer, str):
         if not norm_layer:
             return None
-        layer_name = norm_layer.replace('_', '').lower()
+        layer_name = norm_layer.replace("_", "").lower()
         norm_layer = _NORM_MAP[layer_name]
     else:
         norm_layer = norm_layer

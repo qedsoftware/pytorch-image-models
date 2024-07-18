@@ -16,7 +16,9 @@ class DatasetInfo(ABC):
         pass
 
     @abstractmethod
-    def label_descriptions(self, detailed: bool = False, as_dict: bool = False) -> Union[List[str], Dict[str, str]]:
+    def label_descriptions(
+        self, detailed: bool = False, as_dict: bool = False
+    ) -> Union[List[str], Dict[str, str]]:
         pass
 
     @abstractmethod
@@ -33,17 +35,19 @@ class DatasetInfo(ABC):
 
 
 class CustomDatasetInfo(DatasetInfo):
-    """ DatasetInfo that wraps passed values for custom datasets."""
+    """DatasetInfo that wraps passed values for custom datasets."""
 
     def __init__(
-            self,
-            label_names: Union[List[str], Dict[int, str]],
-            label_descriptions: Optional[Dict[str, str]] = None
+        self,
+        label_names: Union[List[str], Dict[int, str]],
+        label_descriptions: Optional[Dict[str, str]] = None,
     ):
         super().__init__()
         assert len(label_names) > 0
         self._label_names = label_names  # label index => label name mapping
-        self._label_descriptions = label_descriptions  # label name => label description mapping
+        self._label_descriptions = (
+            label_descriptions  # label name => label description mapping
+        )
         if self._label_descriptions is not None:
             # validate descriptions (label names required)
             assert isinstance(self._label_descriptions, dict)
@@ -56,7 +60,9 @@ class CustomDatasetInfo(DatasetInfo):
     def label_names(self):
         return self._label_names
 
-    def label_descriptions(self, detailed: bool = False, as_dict: bool = False) -> Union[List[str], Dict[str, str]]:
+    def label_descriptions(
+        self, detailed: bool = False, as_dict: bool = False
+    ) -> Union[List[str], Dict[str, str]]:
         return self._label_descriptions
 
     def label_name_to_description(self, label: str, detailed: bool = False) -> str:

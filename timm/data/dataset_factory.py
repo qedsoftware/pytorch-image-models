@@ -2,27 +2,40 @@
 
 Hacked together by / Copyright 2021, Ross Wightman
 """
+
 import os
 from typing import Optional
 
-from torchvision.datasets import CIFAR100, CIFAR10, MNIST, KMNIST, FashionMNIST, ImageFolder
+from torchvision.datasets import (
+    CIFAR100,
+    CIFAR10,
+    MNIST,
+    KMNIST,
+    FashionMNIST,
+    ImageFolder,
+)
+
 try:
     from torchvision.datasets import Places365
+
     has_places365 = True
 except ImportError:
     has_places365 = False
 try:
     from torchvision.datasets import INaturalist
+
     has_inaturalist = True
 except ImportError:
     has_inaturalist = False
 try:
     from torchvision.datasets import QMNIST
+
     has_qmnist = True
 except ImportError:
     has_qmnist = False
 try:
     from torchvision.datasets import ImageNet
+
     has_imagenet = True
 except ImportError:
     has_imagenet = False
@@ -42,7 +55,7 @@ _EVAL_SYNONYM = dict(val=None, valid=None, validation=None, eval=None, evaluatio
 
 def _search_split(root, split):
     # look for sub-folder with name of split in root and use that if it exists
-    split_name = split.split('[')[0]
+    split_name = split.split("[")[0]
     try_root = os.path.join(root, split_name)
     if os.path.exists(try_root):
         return try_root
@@ -53,6 +66,7 @@ def _search_split(root, split):
             if os.path.exists(try_root):
                 return try_root
         return root
+
     if split_name in _TRAIN_SYNONYM:
         root = _try(_TRAIN_SYNONYM)
     elif split_name in _EVAL_SYNONYM:
@@ -61,22 +75,22 @@ def _search_split(root, split):
 
 
 def create_dataset(
-        name: str,
-        root: Optional[str] = None,
-        split: str = 'validation',
-        search_split: bool = True,
-        class_map: dict = None,
-        load_bytes: bool = False,
-        is_training: bool = False,
-        download: bool = False,
-        batch_size: int = 1,
-        num_samples: Optional[int] = None,
-        seed: int = 42,
-        repeats: int = 0,
-        input_img_mode: str = 'RGB',
-        **kwargs,
+    name: str,
+    root: Optional[str] = None,
+    split: str = "validation",
+    search_split: bool = True,
+    class_map: dict = None,
+    load_bytes: bool = False,
+    is_training: bool = False,
+    download: bool = False,
+    batch_size: int = 1,
+    num_samples: Optional[int] = None,
+    seed: int = 42,
+    repeats: int = 0,
+    input_img_mode: str = "RGB",
+    **kwargs,
 ):
-    """ Dataset factory method
+    """Dataset factory method
 
     In parentheses after each arg are the type of dataset supported for each arg, one of:
       * folder - default, timm folder (or tar) based ImageDataset
@@ -108,44 +122,52 @@ def create_dataset(
     """
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     name = name.lower()
-    if name.startswith('torch/'):
-        name = name.split('/', 2)[-1]
+    if name.startswith("torch/"):
+        name = name.split("/", 2)[-1]
         torch_kwargs = dict(root=root, download=download, **kwargs)
         if name in _TORCH_BASIC_DS:
             ds_class = _TORCH_BASIC_DS[name]
             use_train = split in _TRAIN_SYNONYM
             ds = ds_class(train=use_train, **torch_kwargs)
-        elif name == 'inaturalist' or name == 'inat':
-            assert has_inaturalist, 'Please update to PyTorch 1.10, torchvision 0.11+ for Inaturalist'
-            target_type = 'full'
-            split_split = split.split('/')
+        elif name == "inaturalist" or name == "inat":
+            assert (
+                has_inaturalist
+            ), "Please update to PyTorch 1.10, torchvision 0.11+ for Inaturalist"
+            target_type = "full"
+            split_split = split.split("/")
             if len(split_split) > 1:
-                target_type = split_split[0].split('_')
+                target_type = split_split[0].split("_")
                 if len(target_type) == 1:
                     target_type = target_type[0]
                 split = split_split[-1]
             if split in _TRAIN_SYNONYM:
-                split = '2021_train'
+                split = "2021_train"
             elif split in _EVAL_SYNONYM:
-                split = '2021_valid'
+                split = "2021_valid"
             ds = INaturalist(version=split, target_type=target_type, **torch_kwargs)
-        elif name == 'places365':
-            assert has_places365, 'Please update to a newer PyTorch and torchvision for Places365 dataset.'
+        elif name == "places365":
+            assert (
+                has_places365
+            ), "Please update to a newer PyTorch and torchvision for Places365 dataset."
             if split in _TRAIN_SYNONYM:
-                split = 'train-standard'
+                split = "train-standard"
             elif split in _EVAL_SYNONYM:
-                split = 'val'
+                split = "val"
             ds = Places365(split=split, **torch_kwargs)
-        elif name == 'qmnist':
-            assert has_qmnist, 'Please update to a newer PyTorch and torchvision for QMNIST dataset.'
+        elif name == "qmnist":
+            assert (
+                has_qmnist
+            ), "Please update to a newer PyTorch and torchvision for QMNIST dataset."
             use_train = split in _TRAIN_SYNONYM
             ds = QMNIST(train=use_train, **torch_kwargs)
-        elif name == 'imagenet':
-            assert has_imagenet, 'Please update to a newer PyTorch and torchvision for ImageNet dataset.'
+        elif name == "imagenet":
+            assert (
+                has_imagenet
+            ), "Please update to a newer PyTorch and torchvision for ImageNet dataset."
             if split in _EVAL_SYNONYM:
-                split = 'val'
+                split = "val"
             ds = ImageNet(split=split, **torch_kwargs)
-        elif name == 'image_folder' or name == 'folder':
+        elif name == "image_folder" or name == "folder":
             # in case torchvision ImageFolder is preferred over timm ImageDataset for some reason
             if search_split and os.path.isdir(root):
                 # look for split specific sub-folder in root
@@ -153,7 +175,7 @@ def create_dataset(
             ds = ImageFolder(root, **kwargs)
         else:
             assert False, f"Unknown torchvision dataset {name}"
-    elif name.startswith('hfds/'):
+    elif name.startswith("hfds/"):
         # NOTE right now, HF datasets default arrow format is a random-access Dataset,
         # There will be a IterableDataset variant too, TBD
         ds = ImageDataset(
@@ -164,7 +186,7 @@ def create_dataset(
             input_img_mode=input_img_mode,
             **kwargs,
         )
-    elif name.startswith('hfids/'):
+    elif name.startswith("hfids/"):
         ds = IterableImageDataset(
             root,
             reader=name,
@@ -177,9 +199,9 @@ def create_dataset(
             repeats=repeats,
             seed=seed,
             input_img_mode=input_img_mode,
-            **kwargs
+            **kwargs,
         )
-    elif name.startswith('tfds/'):
+    elif name.startswith("tfds/"):
         ds = IterableImageDataset(
             root,
             reader=name,
@@ -192,9 +214,9 @@ def create_dataset(
             repeats=repeats,
             seed=seed,
             input_img_mode=input_img_mode,
-            **kwargs
+            **kwargs,
         )
-    elif name.startswith('wds/'):
+    elif name.startswith("wds/"):
         ds = IterableImageDataset(
             root,
             reader=name,
@@ -206,7 +228,7 @@ def create_dataset(
             repeats=repeats,
             seed=seed,
             input_img_mode=input_img_mode,
-            **kwargs
+            **kwargs,
         )
     else:
         # FIXME support more advance split cfg for ImageFolder/Tar datasets in the future

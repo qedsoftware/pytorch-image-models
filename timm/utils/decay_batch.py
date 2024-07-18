@@ -2,11 +2,12 @@
 
 Copyright 2022 Ross Wightman
 """
+
 import math
 
 
 def decay_batch_step(batch_size, num_intra_steps=2, no_odd=False):
-    """ power of two batch-size decay with intra steps
+    """power of two batch-size decay with intra steps
 
     Decay by stepping between powers of 2:
     * determine power-of-2 floor of current batch size (base batch size)
@@ -23,21 +24,22 @@ def decay_batch_step(batch_size, num_intra_steps=2, no_odd=False):
         return 0
     base_batch_size = int(2 ** (math.log(batch_size - 1) // math.log(2)))
     step_size = max(base_batch_size // num_intra_steps, 1)
-    batch_size = base_batch_size + ((batch_size - base_batch_size - 1) // step_size) * step_size
+    batch_size = (
+        base_batch_size + ((batch_size - base_batch_size - 1) // step_size) * step_size
+    )
     if no_odd and batch_size % 2:
         batch_size -= 1
     return batch_size
 
 
 def check_batch_size_retry(error_str):
-    """ check failure error string for conditions where batch decay retry should not be attempted
-    """
+    """check failure error string for conditions where batch decay retry should not be attempted"""
     error_str = error_str.lower()
-    if 'required rank' in error_str:
+    if "required rank" in error_str:
         # Errors involving phrase 'required rank' typically happen when a conv is used that's
         # not compatible with channels_last memory format.
         return False
-    if 'illegal' in error_str:
+    if "illegal" in error_str:
         # 'Illegal memory access' errors in CUDA typically leave process in unusable state
         return False
     return True

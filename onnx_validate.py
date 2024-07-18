@@ -6,6 +6,7 @@ pipeline for a fair comparison against the originals.
 
 Copyright 2020 Ross Wightman
 """
+
 import argparse
 import numpy as np
 import onnxruntime
@@ -13,31 +14,86 @@ from timm.data import create_loader, resolve_data_config, create_dataset
 from timm.utils import AverageMeter
 import time
 
-parser = argparse.ArgumentParser(description='ONNX Validation')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
-parser.add_argument('--onnx-input', default='', type=str, metavar='PATH',
-                    help='path to onnx model/weights file')
-parser.add_argument('--onnx-output-opt', default='', type=str, metavar='PATH',
-                    help='path to output optimized onnx graph')
-parser.add_argument('--profile', action='store_true', default=False,
-                    help='Enable profiler output.')
-parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
-                    help='number of data loading workers (default: 2)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
-                    metavar='N', help='mini-batch size (default: 256)')
-parser.add_argument('--img-size', default=None, type=int,
-                    metavar='N', help='Input image dimension, uses model default if empty')
-parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
-                    help='Override mean pixel value of dataset')
-parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD',
-                    help='Override std deviation of of dataset')
-parser.add_argument('--crop-pct', type=float, default=None, metavar='PCT',
-                    help='Override default crop pct of 0.875')
-parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
-                    help='Image resize interpolation type (overrides model)')
-parser.add_argument('--print-freq', '-p', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
+parser = argparse.ArgumentParser(description="ONNX Validation")
+parser.add_argument("data", metavar="DIR", help="path to dataset")
+parser.add_argument(
+    "--onnx-input",
+    default="",
+    type=str,
+    metavar="PATH",
+    help="path to onnx model/weights file",
+)
+parser.add_argument(
+    "--onnx-output-opt",
+    default="",
+    type=str,
+    metavar="PATH",
+    help="path to output optimized onnx graph",
+)
+parser.add_argument(
+    "--profile", action="store_true", default=False, help="Enable profiler output."
+)
+parser.add_argument(
+    "-j",
+    "--workers",
+    default=2,
+    type=int,
+    metavar="N",
+    help="number of data loading workers (default: 2)",
+)
+parser.add_argument(
+    "-b",
+    "--batch-size",
+    default=256,
+    type=int,
+    metavar="N",
+    help="mini-batch size (default: 256)",
+)
+parser.add_argument(
+    "--img-size",
+    default=None,
+    type=int,
+    metavar="N",
+    help="Input image dimension, uses model default if empty",
+)
+parser.add_argument(
+    "--mean",
+    type=float,
+    nargs="+",
+    default=None,
+    metavar="MEAN",
+    help="Override mean pixel value of dataset",
+)
+parser.add_argument(
+    "--std",
+    type=float,
+    nargs="+",
+    default=None,
+    metavar="STD",
+    help="Override std deviation of of dataset",
+)
+parser.add_argument(
+    "--crop-pct",
+    type=float,
+    default=None,
+    metavar="PCT",
+    help="Override default crop pct of 0.875",
+)
+parser.add_argument(
+    "--interpolation",
+    default="",
+    type=str,
+    metavar="NAME",
+    help="Image resize interpolation type (overrides model)",
+)
+parser.add_argument(
+    "--print-freq",
+    "-p",
+    default=10,
+    type=int,
+    metavar="N",
+    help="print frequency (default: 10)",
+)
 
 
 def main():
@@ -46,7 +102,9 @@ def main():
 
     # Set graph optimization level
     sess_options = onnxruntime.SessionOptions()
-    sess_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
+    sess_options.graph_optimization_level = (
+        onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
+    )
     if args.profile:
         sess_options.enable_profiling = True
     if args.onnx_output_opt:
@@ -56,15 +114,15 @@ def main():
 
     data_config = resolve_data_config(vars(args))
     loader = create_loader(
-        create_dataset('', args.data),
-        input_size=data_config['input_size'],
+        create_dataset("", args.data),
+        input_size=data_config["input_size"],
         batch_size=args.batch_size,
         use_prefetcher=False,
-        interpolation=data_config['interpolation'],
-        mean=data_config['mean'],
-        std=data_config['std'],
+        interpolation=data_config["interpolation"],
+        mean=data_config["mean"],
+        std=data_config["std"],
         num_workers=args.workers,
-        crop_pct=data_config['crop_pct']
+        crop_pct=data_config["crop_pct"],
     )
 
     input_name = session.get_inputs()[0].name
@@ -89,14 +147,16 @@ def main():
 
         if i % args.print_freq == 0:
             print(
-                f'Test: [{i}/{len(loader)}]\t'
-                f'Time {batch_time.val:.3f} ({batch_time.avg:.3f}, {input.size(0) / batch_time.avg:.3f}/s, '
-                f'{100 * batch_time.avg / input.size(0):.3f} ms/sample) \t'
-                f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'
+                f"Test: [{i}/{len(loader)}]\t"
+                f"Time {batch_time.val:.3f} ({batch_time.avg:.3f}, {input.size(0) / batch_time.avg:.3f}/s, "
+                f"{100 * batch_time.avg / input.size(0):.3f} ms/sample) \t"
+                f"Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t"
+                f"Prec@5 {top5.val:.3f} ({top5.avg:.3f})"
             )
 
-    print(f' * Prec@1 {top1.avg:.3f} ({100-top1.avg:.3f}) Prec@5 {top5.avg:.3f} ({100.-top5.avg:.3f})')
+    print(
+        f" * Prec@1 {top1.avg:.3f} ({100-top1.avg:.3f}) Prec@5 {top5.avg:.3f} ({100.-top5.avg:.3f})"
+    )
 
 
 def accuracy_np(output, target):
@@ -106,5 +166,5 @@ def accuracy_np(output, target):
     return top1, top5
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

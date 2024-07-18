@@ -3,6 +3,7 @@
 Originally from torchvision Inception3 model
 Licensed BSD-Clause 3 https://github.com/pytorch/vision/blob/master/LICENSE
 """
+
 from functools import partial
 from typing import Optional
 
@@ -10,14 +11,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from timm.data import (
+    IMAGENET_DEFAULT_STD,
+    IMAGENET_DEFAULT_MEAN,
+    IMAGENET_INCEPTION_MEAN,
+    IMAGENET_INCEPTION_STD,
+)
 from timm.layers import trunc_normal_, create_classifier, Linear, ConvNormAct
 from ._builder import build_model_with_cfg
 from ._builder import resolve_pretrained_cfg
 from ._manipulate import flatten_modules
-from ._registry import register_model, generate_default_cfgs, register_model_deprecations
+from ._registry import (
+    register_model,
+    generate_default_cfgs,
+    register_model_deprecations,
+)
 
-__all__ = ['InceptionV3']  # model_registry will add each entrypoint fn to this
+__all__ = ["InceptionV3"]  # model_registry will add each entrypoint fn to this
 
 
 class InceptionA(nn.Module):
@@ -237,20 +247,20 @@ class InceptionAux(nn.Module):
 
 
 class InceptionV3(nn.Module):
-    """Inception-V3
-    """
+    """Inception-V3"""
+
     aux_logits: torch.jit.Final[bool]
 
     def __init__(
-            self,
-            num_classes=1000,
-            in_chans=3,
-            drop_rate=0.,
-            global_pool='avg',
-            aux_logits=False,
-            norm_layer='batchnorm2d',
-            norm_eps=1e-3,
-            act_layer='relu',
+        self,
+        num_classes=1000,
+        in_chans=3,
+        drop_rate=0.0,
+        global_pool="avg",
+        aux_logits=False,
+        norm_layer="batchnorm2d",
+        norm_eps=1e-3,
+        act_layer="relu",
     ):
         super(InceptionV3, self).__init__()
         self.num_classes = num_classes
@@ -287,11 +297,11 @@ class InceptionV3(nn.Module):
         self.Mixed_7b = InceptionE(1280, conv_block=conv_block)
         self.Mixed_7c = InceptionE(2048, conv_block=conv_block)
         self.feature_info = [
-            dict(num_chs=64, reduction=2, module='Conv2d_2b_3x3'),
-            dict(num_chs=192, reduction=4, module='Conv2d_4a_3x3'),
-            dict(num_chs=288, reduction=8, module='Mixed_5d'),
-            dict(num_chs=768, reduction=16, module='Mixed_6e'),
-            dict(num_chs=2048, reduction=32, module='Mixed_7c'),
+            dict(num_chs=64, reduction=2, module="Conv2d_2b_3x3"),
+            dict(num_chs=192, reduction=4, module="Conv2d_4a_3x3"),
+            dict(num_chs=288, reduction=8, module="Mixed_5d"),
+            dict(num_chs=768, reduction=16, module="Mixed_6e"),
+            dict(num_chs=2048, reduction=32, module="Mixed_7c"),
         ]
 
         self.num_features = self.head_hidden_size = 2048
@@ -304,7 +314,7 @@ class InceptionV3(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-                stddev = m.stddev if hasattr(m, 'stddev') else 0.1
+                stddev = m.stddev if hasattr(m, "stddev") else 0.1
                 trunc_normal_(m.weight, std=stddev)
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
@@ -312,32 +322,40 @@ class InceptionV3(nn.Module):
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
-        module_map = {k: i for i, (k, _) in enumerate(flatten_modules(self.named_children(), prefix=()))}
-        module_map.pop(('fc',))
+        module_map = {
+            k: i
+            for i, (k, _) in enumerate(
+                flatten_modules(self.named_children(), prefix=())
+            )
+        }
+        module_map.pop(("fc",))
 
         def _matcher(name):
-            if any([name.startswith(n) for n in ('Conv2d_1', 'Conv2d_2')]):
+            if any([name.startswith(n) for n in ("Conv2d_1", "Conv2d_2")]):
                 return 0
-            elif any([name.startswith(n) for n in ('Conv2d_3', 'Conv2d_4')]):
+            elif any([name.startswith(n) for n in ("Conv2d_3", "Conv2d_4")]):
                 return 1
             else:
                 for k in module_map.keys():
-                    if k == tuple(name.split('.')[:len(k)]):
+                    if k == tuple(name.split(".")[: len(k)]):
                         return module_map[k]
-                return float('inf')
+                return float("inf")
+
         return _matcher
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
-        assert not enable, 'gradient checkpointing not supported'
+        assert not enable, "gradient checkpointing not supported"
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
         return self.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = "avg"):
         self.num_classes = num_classes
-        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.fc = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool
+        )
 
     def forward_preaux(self, x):
         x = self.Conv2d_1a_3x3(x)  # N x 32 x 149 x 149
@@ -391,14 +409,16 @@ class InceptionV3(nn.Module):
 
 
 def _create_inception_v3(variant, pretrained=False, **kwargs):
-    pretrained_cfg = resolve_pretrained_cfg(variant, pretrained_cfg=kwargs.pop('pretrained_cfg', None))
-    aux_logits = kwargs.get('aux_logits', False)
+    pretrained_cfg = resolve_pretrained_cfg(
+        variant, pretrained_cfg=kwargs.pop("pretrained_cfg", None)
+    )
+    aux_logits = kwargs.get("aux_logits", False)
     has_aux_logits = False
     if pretrained_cfg:
         # only torchvision pretrained weights have aux logits
-        has_aux_logits = pretrained_cfg.tag == 'tv_in1k'
+        has_aux_logits = pretrained_cfg.tag == "tv_in1k"
     if aux_logits:
-        assert not kwargs.pop('features_only', False)
+        assert not kwargs.pop("features_only", False)
         load_strict = has_aux_logits
     else:
         load_strict = not has_aux_logits
@@ -413,46 +433,57 @@ def _create_inception_v3(variant, pretrained=False, **kwargs):
     )
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url="", **kwargs):
     return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
-        'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
-        'first_conv': 'Conv2d_1a_3x3.conv', 'classifier': 'fc',
-        **kwargs
+        "url": url,
+        "num_classes": 1000,
+        "input_size": (3, 299, 299),
+        "pool_size": (8, 8),
+        "crop_pct": 0.875,
+        "interpolation": "bicubic",
+        "mean": IMAGENET_INCEPTION_MEAN,
+        "std": IMAGENET_INCEPTION_STD,
+        "first_conv": "Conv2d_1a_3x3.conv",
+        "classifier": "fc",
+        **kwargs,
     }
 
 
-default_cfgs = generate_default_cfgs({
-    # original PyTorch weights, ported from Tensorflow but modified
-    'inception_v3.tv_in1k': _cfg(
-        # NOTE checkpoint has aux logit layer weights
-        hf_hub_id='timm/',
-        url='https://download.pytorch.org/models/inception_v3_google-1a9a5a14.pth'),
-    # my port of Tensorflow SLIM weights (http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)
-    'inception_v3.tf_in1k': _cfg(hf_hub_id='timm/'),
-    # my port of Tensorflow adversarially trained Inception V3 from
-    # http://download.tensorflow.org/models/adv_inception_v3_2017_08_18.tar.gz
-    'inception_v3.tf_adv_in1k': _cfg(hf_hub_id='timm/'),
-    # from gluon pretrained models, best performing in terms of accuracy/loss metrics
-    # https://gluon-cv.mxnet.io/model_zoo/classification.html
-    'inception_v3.gluon_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=IMAGENET_DEFAULT_MEAN,  # also works well with inception defaults
-        std=IMAGENET_DEFAULT_STD,  # also works well with inception defaults
-    )
-})
+default_cfgs = generate_default_cfgs(
+    {
+        # original PyTorch weights, ported from Tensorflow but modified
+        "inception_v3.tv_in1k": _cfg(
+            # NOTE checkpoint has aux logit layer weights
+            hf_hub_id="timm/",
+            url="https://download.pytorch.org/models/inception_v3_google-1a9a5a14.pth",
+        ),
+        # my port of Tensorflow SLIM weights (http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)
+        "inception_v3.tf_in1k": _cfg(hf_hub_id="timm/"),
+        # my port of Tensorflow adversarially trained Inception V3 from
+        # http://download.tensorflow.org/models/adv_inception_v3_2017_08_18.tar.gz
+        "inception_v3.tf_adv_in1k": _cfg(hf_hub_id="timm/"),
+        # from gluon pretrained models, best performing in terms of accuracy/loss metrics
+        # https://gluon-cv.mxnet.io/model_zoo/classification.html
+        "inception_v3.gluon_in1k": _cfg(
+            hf_hub_id="timm/",
+            mean=IMAGENET_DEFAULT_MEAN,  # also works well with inception defaults
+            std=IMAGENET_DEFAULT_STD,  # also works well with inception defaults
+        ),
+    }
+)
 
 
 @register_model
 def inception_v3(pretrained=False, **kwargs) -> InceptionV3:
-    model = _create_inception_v3('inception_v3', pretrained=pretrained, **kwargs)
+    model = _create_inception_v3("inception_v3", pretrained=pretrained, **kwargs)
     return model
 
 
-register_model_deprecations(__name__, {
-    'tf_inception_v3': 'inception_v3.tf_in1k',
-    'adv_inception_v3': 'inception_v3.tf_adv_in1k',
-    'gluon_inception_v3': 'inception_v3.gluon_in1k',
-})
+register_model_deprecations(
+    __name__,
+    {
+        "tf_inception_v3": "inception_v3.tf_in1k",
+        "adv_inception_v3": "inception_v3.tf_adv_in1k",
+        "gluon_inception_v3": "inception_v3.gluon_in1k",
+    },
+)

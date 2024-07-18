@@ -5,6 +5,7 @@ BlurPool layer inspired by
 
 Hacked together by Chris Ha and Ross Wightman
 """
+
 from functools import partial
 from typing import Optional, Type
 
@@ -30,12 +31,13 @@ class BlurPool2d(nn.Module):
     Returns:
         torch.Tensor: the transformed tensor.
     """
+
     def __init__(
-            self,
-            channels: Optional[int] = None,
-            filt_size: int = 3,
-            stride: int = 2,
-            pad_mode: str = 'reflect',
+        self,
+        channels: Optional[int] = None,
+        filt_size: int = 3,
+        stride: int = 2,
+        pad_mode: str = "reflect",
     ) -> None:
         super(BlurPool2d, self).__init__()
         assert filt_size > 1
@@ -45,11 +47,13 @@ class BlurPool2d(nn.Module):
         self.pad_mode = pad_mode
         self.padding = [get_padding(filt_size, stride, dilation=1)] * 4
 
-        coeffs = torch.tensor((np.poly1d((0.5, 0.5)) ** (self.filt_size - 1)).coeffs.astype(np.float32))
+        coeffs = torch.tensor(
+            (np.poly1d((0.5, 0.5)) ** (self.filt_size - 1)).coeffs.astype(np.float32)
+        )
         blur_filter = (coeffs[:, None] * coeffs[None, :])[None, None, :, :]
         if channels is not None:
             blur_filter = blur_filter.repeat(self.channels, 1, 1, 1)
-        self.register_buffer('filt', blur_filter, persistent=False)
+        self.register_buffer("filt", blur_filter, persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.pad(x, self.padding, mode=self.pad_mode)
@@ -63,24 +67,24 @@ class BlurPool2d(nn.Module):
 
 
 def create_aa(
-        aa_layer: LayerType,
-        channels: Optional[int] = None,
-        stride: int = 2,
-        enable: bool = True,
-        noop: Optional[Type[nn.Module]] = nn.Identity
+    aa_layer: LayerType,
+    channels: Optional[int] = None,
+    stride: int = 2,
+    enable: bool = True,
+    noop: Optional[Type[nn.Module]] = nn.Identity,
 ) -> nn.Module:
-    """ Anti-aliasing """
+    """Anti-aliasing"""
     if not aa_layer or not enable:
         return noop() if noop is not None else None
 
     if isinstance(aa_layer, str):
-        aa_layer = aa_layer.lower().replace('_', '').replace('-', '')
-        if aa_layer == 'avg' or aa_layer == 'avgpool':
+        aa_layer = aa_layer.lower().replace("_", "").replace("-", "")
+        if aa_layer == "avg" or aa_layer == "avgpool":
             aa_layer = nn.AvgPool2d
-        elif aa_layer == 'blur' or aa_layer == 'blurpool':
+        elif aa_layer == "blur" or aa_layer == "blurpool":
             aa_layer = BlurPool2d
-        elif aa_layer == 'blurpc':
-            aa_layer = partial(BlurPool2d, pad_mode='constant')
+        elif aa_layer == "blurpc":
+            aa_layer = partial(BlurPool2d, pad_mode="constant")
 
         else:
             assert False, f"Unknown anti-aliasing layer ({aa_layer})."

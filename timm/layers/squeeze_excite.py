@@ -10,6 +10,7 @@ Paper: `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxi
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
+
 from torch import nn as nn
 
 from .create_act import create_act_layer
@@ -17,7 +18,7 @@ from .helpers import make_divisible
 
 
 class SEModule(nn.Module):
-    """ SE Module as defined in original SE-Nets with a few additions
+    """SE Module as defined in original SE-Nets with a few additions
     Additions include:
         * divisor can be specified to keep channels % div == 0 (default: 8)
         * reduction channels can be specified directly by arg (if rd_channels is set)
@@ -25,13 +26,25 @@ class SEModule(nn.Module):
         * global max pooling can be added to the squeeze aggregation
         * customizable activation, normalization, and gate layer
     """
+
     def __init__(
-            self, channels, rd_ratio=1. / 16, rd_channels=None, rd_divisor=8, add_maxpool=False,
-            bias=True, act_layer=nn.ReLU, norm_layer=None, gate_layer='sigmoid'):
+        self,
+        channels,
+        rd_ratio=1.0 / 16,
+        rd_channels=None,
+        rd_divisor=8,
+        add_maxpool=False,
+        bias=True,
+        act_layer=nn.ReLU,
+        norm_layer=None,
+        gate_layer="sigmoid",
+    ):
         super(SEModule, self).__init__()
         self.add_maxpool = add_maxpool
         if not rd_channels:
-            rd_channels = make_divisible(channels * rd_ratio, rd_divisor, round_limit=0.)
+            rd_channels = make_divisible(
+                channels * rd_ratio, rd_divisor, round_limit=0.0
+            )
         self.fc1 = nn.Conv2d(channels, rd_channels, kernel_size=1, bias=bias)
         self.bn = norm_layer(rd_channels) if norm_layer else nn.Identity()
         self.act = create_act_layer(act_layer, inplace=True)
@@ -53,10 +66,11 @@ SqueezeExcite = SEModule  # alias
 
 
 class EffectiveSEModule(nn.Module):
-    """ 'Effective Squeeze-Excitation
+    """'Effective Squeeze-Excitation
     From `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
     """
-    def __init__(self, channels, add_maxpool=False, gate_layer='hard_sigmoid', **_):
+
+    def __init__(self, channels, add_maxpool=False, gate_layer="hard_sigmoid", **_):
         super(EffectiveSEModule, self).__init__()
         self.add_maxpool = add_maxpool
         self.fc = nn.Conv2d(channels, channels, kernel_size=1, padding=0)
@@ -75,7 +89,7 @@ EffectiveSqueezeExcite = EffectiveSEModule  # alias
 
 
 class SqueezeExciteCl(nn.Module):
-    """ SE Module as defined in original SE-Nets with a few additions
+    """SE Module as defined in original SE-Nets with a few additions
     Additions include:
         * divisor can be specified to keep channels % div == 0 (default: 8)
         * reduction channels can be specified directly by arg (if rd_channels is set)
@@ -83,19 +97,31 @@ class SqueezeExciteCl(nn.Module):
         * global max pooling can be added to the squeeze aggregation
         * customizable activation, normalization, and gate layer
     """
+
     def __init__(
-            self, channels, rd_ratio=1. / 16, rd_channels=None, rd_divisor=8,
-            bias=True, act_layer=nn.ReLU, gate_layer='sigmoid'):
+        self,
+        channels,
+        rd_ratio=1.0 / 16,
+        rd_channels=None,
+        rd_divisor=8,
+        bias=True,
+        act_layer=nn.ReLU,
+        gate_layer="sigmoid",
+    ):
         super().__init__()
         if not rd_channels:
-            rd_channels = make_divisible(channels * rd_ratio, rd_divisor, round_limit=0.)
+            rd_channels = make_divisible(
+                channels * rd_ratio, rd_divisor, round_limit=0.0
+            )
         self.fc1 = nn.Linear(channels, rd_channels, bias=bias)
         self.act = create_act_layer(act_layer, inplace=True)
         self.fc2 = nn.Linear(rd_channels, channels, bias=bias)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
-        x_se = x.mean((1, 2), keepdims=True)  # FIXME avg dim [1:n-1], don't assume 2D NHWC
+        x_se = x.mean(
+            (1, 2), keepdims=True
+        )  # FIXME avg dim [1:n-1], don't assume 2D NHWC
         x_se = self.fc1(x_se)
         x_se = self.act(x_se)
         x_se = self.fc2(x_se)

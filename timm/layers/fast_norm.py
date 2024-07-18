@@ -6,6 +6,7 @@ Additionally, for LayerNorm, the APEX fused LN is used if available (which also 
 
 Hacked together by / Copyright 2022 Ross Wightman
 """
+
 from typing import List, Optional
 
 import torch
@@ -13,12 +14,17 @@ from torch.nn import functional as F
 
 try:
     from apex.normalization.fused_layer_norm import fused_layer_norm_affine
+
     has_apex = True
 except ImportError:
     has_apex = False
 
 try:
-    from apex.normalization.fused_layer_norm import fused_rms_norm_affine, fused_rms_norm
+    from apex.normalization.fused_layer_norm import (
+        fused_rms_norm_affine,
+        fused_rms_norm,
+    )
+
     has_apex_rmsnorm = True
 except ImportError:
     has_apex_rmsnorm = False
@@ -42,7 +48,7 @@ def fast_group_norm(
     num_groups: int,
     weight: Optional[torch.Tensor] = None,
     bias: Optional[torch.Tensor] = None,
-    eps: float = 1e-5
+    eps: float = 1e-5,
 ) -> torch.Tensor:
     if torch.jit.is_scripting():
         # currently cannot use is_autocast_enabled within torchscript
@@ -53,7 +59,11 @@ def fast_group_norm(
         # here we use the low precision autocast dtype
         # FIXME what to do re CPU autocast?
         dt = torch.get_autocast_gpu_dtype()
-        x, weight, bias = x.to(dt), weight.to(dt), bias.to(dt) if bias is not None else None
+        x, weight, bias = (
+            x.to(dt),
+            weight.to(dt),
+            bias.to(dt) if bias is not None else None,
+        )
 
     with torch.cuda.amp.autocast(enabled=False):
         return F.group_norm(x, num_groups, weight, bias, eps)
@@ -64,7 +74,7 @@ def fast_layer_norm(
     normalized_shape: List[int],
     weight: Optional[torch.Tensor] = None,
     bias: Optional[torch.Tensor] = None,
-    eps: float = 1e-5
+    eps: float = 1e-5,
 ) -> torch.Tensor:
     if torch.jit.is_scripting():
         # currently cannot use is_autocast_enabled within torchscript
@@ -78,7 +88,11 @@ def fast_layer_norm(
         # apex LN does not, this is behaving like Apex
         dt = torch.get_autocast_gpu_dtype()
         # FIXME what to do re CPU autocast?
-        x, weight, bias = x.to(dt), weight.to(dt), bias.to(dt) if bias is not None else None
+        x, weight, bias = (
+            x.to(dt),
+            weight.to(dt),
+            bias.to(dt) if bias is not None else None,
+        )
 
     with torch.cuda.amp.autocast(enabled=False):
         return F.layer_norm(x, normalized_shape, weight, bias, eps)

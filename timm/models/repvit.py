@@ -15,7 +15,7 @@ Paper: `RepViT: Revisiting Mobile CNN From ViT Perspective`
 Adapted from official impl at https://github.com/jameslahm/RepViT
 """
 
-__all__ = ['RepVit']
+__all__ = ["RepVit"]
 from typing import Optional
 
 import torch
@@ -29,10 +29,23 @@ from ._registry import register_model, generate_default_cfgs
 
 
 class ConvNorm(nn.Sequential):
-    def __init__(self, in_dim, out_dim, ks=1, stride=1, pad=0, dilation=1, groups=1, bn_weight_init=1):
+    def __init__(
+        self,
+        in_dim,
+        out_dim,
+        ks=1,
+        stride=1,
+        pad=0,
+        dilation=1,
+        groups=1,
+        bn_weight_init=1,
+    ):
         super().__init__()
-        self.add_module('c', nn.Conv2d(in_dim, out_dim, ks, stride, pad, dilation, groups, bias=False))
-        self.add_module('bn', nn.BatchNorm2d(out_dim))
+        self.add_module(
+            "c",
+            nn.Conv2d(in_dim, out_dim, ks, stride, pad, dilation, groups, bias=False),
+        )
+        self.add_module("bn", nn.BatchNorm2d(out_dim))
         nn.init.constant_(self.bn.weight, bn_weight_init)
         nn.init.constant_(self.bn.bias, 0)
 
@@ -60,8 +73,8 @@ class ConvNorm(nn.Sequential):
 class NormLinear(nn.Sequential):
     def __init__(self, in_dim, out_dim, bias=True, std=0.02):
         super().__init__()
-        self.add_module('bn', nn.BatchNorm1d(in_dim))
-        self.add_module('l', nn.Linear(in_dim, out_dim, bias=bias))
+        self.add_module("bn", nn.BatchNorm1d(in_dim))
+        self.add_module("l", nn.Linear(in_dim, out_dim, bias=bias))
         trunc_normal_(self.l.weight, std=std)
         if bias:
             nn.init.constant_(self.l.bias, 0)
@@ -70,7 +83,10 @@ class NormLinear(nn.Sequential):
     def fuse(self):
         bn, l = self._modules.values()
         w = bn.weight / (bn.running_var + bn.eps) ** 0.5
-        b = bn.bias - self.bn.running_mean * self.bn.weight / (bn.running_var + bn.eps) ** 0.5
+        b = (
+            bn.bias
+            - self.bn.running_mean * self.bn.weight / (bn.running_var + bn.eps) ** 0.5
+        )
         w = l.weight * w[None, :]
         if l.bias is None:
             b = b @ self.l.weight.T
@@ -116,7 +132,8 @@ class RepVggDw(nn.Module):
         conv1_w = nn.functional.pad(conv1_w, [1, 1, 1, 1])
 
         identity = nn.functional.pad(
-            torch.ones(conv1_w.shape[0], conv1_w.shape[1], 1, 1, device=conv1_w.device), [1, 1, 1, 1]
+            torch.ones(conv1_w.shape[0], conv1_w.shape[1], 1, 1, device=conv1_w.device),
+            [1, 1, 1, 1],
         )
 
         final_conv_w = conv_w + conv1_w + identity
@@ -129,7 +146,12 @@ class RepVggDw(nn.Module):
             bn = self.bn
             w = bn.weight / (bn.running_var + bn.eps) ** 0.5
             w = conv.weight * w[:, None, None, None]
-            b = bn.bias + (conv.bias - bn.running_mean) * bn.weight / (bn.running_var + bn.eps) ** 0.5
+            b = (
+                bn.bias
+                + (conv.bias - bn.running_mean)
+                * bn.weight
+                / (bn.running_var + bn.eps) ** 0.5
+            )
             conv.weight.data.copy_(w)
             conv.bias.data.copy_(b)
         return conv
@@ -175,10 +197,21 @@ class RepVitStem(nn.Module):
 
 
 class RepVitDownsample(nn.Module):
-    def __init__(self, in_dim, mlp_ratio, out_dim, kernel_size, act_layer, legacy=False):
+    def __init__(
+        self, in_dim, mlp_ratio, out_dim, kernel_size, act_layer, legacy=False
+    ):
         super().__init__()
-        self.pre_block = RepViTBlock(in_dim, mlp_ratio, kernel_size, use_se=False, act_layer=act_layer, legacy=legacy)
-        self.spatial_downsample = ConvNorm(in_dim, in_dim, kernel_size, 2, (kernel_size - 1) // 2, groups=in_dim)
+        self.pre_block = RepViTBlock(
+            in_dim,
+            mlp_ratio,
+            kernel_size,
+            use_se=False,
+            act_layer=act_layer,
+            legacy=legacy,
+        )
+        self.spatial_downsample = ConvNorm(
+            in_dim, in_dim, kernel_size, 2, (kernel_size - 1) // 2, groups=in_dim
+        )
         self.channel_downsample = ConvNorm(in_dim, out_dim, 1, 1)
         self.ffn = RepVitMlp(out_dim, out_dim * mlp_ratio, act_layer)
 
@@ -200,13 +233,19 @@ class RepVitClassifier(nn.Module):
         self.distilled_training = False
         self.num_classes = num_classes
         if distillation:
-            self.head_dist = NormLinear(dim, num_classes) if num_classes > 0 else nn.Identity()
+            self.head_dist = (
+                NormLinear(dim, num_classes) if num_classes > 0 else nn.Identity()
+            )
 
     def forward(self, x):
         x = self.head_drop(x)
         if self.distillation:
             x1, x2 = self.head(x), self.head_dist(x)
-            if self.training and self.distilled_training and not torch.jit.is_scripting():
+            if (
+                self.training
+                and self.distilled_training
+                and not torch.jit.is_scripting()
+            ):
                 return x1, x2
             else:
                 return (x1 + x2) / 2
@@ -231,10 +270,22 @@ class RepVitClassifier(nn.Module):
 
 
 class RepVitStage(nn.Module):
-    def __init__(self, in_dim, out_dim, depth, mlp_ratio, act_layer, kernel_size=3, downsample=True, legacy=False):
+    def __init__(
+        self,
+        in_dim,
+        out_dim,
+        depth,
+        mlp_ratio,
+        act_layer,
+        kernel_size=3,
+        downsample=True,
+        legacy=False,
+    ):
         super().__init__()
         if downsample:
-            self.downsample = RepVitDownsample(in_dim, mlp_ratio, out_dim, kernel_size, act_layer, legacy)
+            self.downsample = RepVitDownsample(
+                in_dim, mlp_ratio, out_dim, kernel_size, act_layer, legacy
+            )
         else:
             assert in_dim == out_dim
             self.downsample = nn.Identity()
@@ -242,7 +293,9 @@ class RepVitStage(nn.Module):
         blocks = []
         use_se = True
         for _ in range(depth):
-            blocks.append(RepViTBlock(out_dim, mlp_ratio, kernel_size, use_se, act_layer, legacy))
+            blocks.append(
+                RepViTBlock(out_dim, mlp_ratio, kernel_size, use_se, act_layer, legacy)
+            )
             use_se = not use_se
 
         self.blocks = nn.Sequential(*blocks)
@@ -261,7 +314,7 @@ class RepVit(nn.Module):
         embed_dim=(48,),
         depth=(2,),
         mlp_ratio=2,
-        global_pool='avg',
+        global_pool="avg",
         kernel_size=3,
         num_classes=1000,
         act_layer=nn.GELU,
@@ -278,7 +331,9 @@ class RepVit(nn.Module):
         in_dim = embed_dim[0]
         self.stem = RepVitStem(in_chans, in_dim, act_layer)
         stride = self.stem.stride
-        resolution = tuple([i // p for i, p in zip(to_2tuple(img_size), to_2tuple(stride))])
+        resolution = tuple(
+            [i // p for i, p in zip(to_2tuple(img_size), to_2tuple(stride))]
+        )
 
         num_stages = len(embed_dim)
         mlp_ratios = to_ntuple(num_stages)(mlp_ratio)
@@ -302,7 +357,9 @@ class RepVit(nn.Module):
             stage_stride = 2 if downsample else 1
             stride *= stage_stride
             resolution = tuple([(r - 1) // stage_stride + 1 for r in resolution])
-            self.feature_info += [dict(num_chs=embed_dim[i], reduction=stride, module=f'stages.{i}')]
+            self.feature_info += [
+                dict(num_chs=embed_dim[i], reduction=stride, module=f"stages.{i}")
+            ]
             in_dim = embed_dim[i]
         self.stages = nn.Sequential(*stages)
 
@@ -312,7 +369,9 @@ class RepVit(nn.Module):
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
-        matcher = dict(stem=r'^stem', blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))])  # stem and embed
+        matcher = dict(
+            stem=r"^stem", blocks=[(r"^blocks\.(\d+)", None), (r"^norm", (99999,))]
+        )  # stem and embed
         return matcher
 
     @torch.jit.ignore
@@ -323,7 +382,12 @@ class RepVit(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, distillation: bool = False):
+    def reset_classifier(
+        self,
+        num_classes: int,
+        global_pool: Optional[str] = None,
+        distillation: bool = False,
+    ):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -342,7 +406,7 @@ class RepVit(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        if self.global_pool == 'avg':
+        if self.global_pool == "avg":
             x = x.mean((2, 3), keepdim=False)
         x = self.head_drop(x)
         if pre_logits:
@@ -358,7 +422,7 @@ class RepVit(nn.Module):
     def fuse(self):
         def fuse_children(net):
             for child_name, child in net.named_children():
-                if hasattr(child, 'fuse'):
+                if hasattr(child, "fuse"):
                     fused = child.fuse()
                     setattr(net, child_name, fused)
                     fuse_children(fused)
@@ -368,69 +432,69 @@ class RepVit(nn.Module):
         fuse_children(self)
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url="", **kwargs):
     return {
-        'url': url,
-        'num_classes': 1000,
-        'input_size': (3, 224, 224),
-        'pool_size': (7, 7),
-        'crop_pct': 0.95,
-        'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN,
-        'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv1.c',
-        'classifier': ('head.head.l', 'head.head_dist.l'),
+        "url": url,
+        "num_classes": 1000,
+        "input_size": (3, 224, 224),
+        "pool_size": (7, 7),
+        "crop_pct": 0.95,
+        "interpolation": "bicubic",
+        "mean": IMAGENET_DEFAULT_MEAN,
+        "std": IMAGENET_DEFAULT_STD,
+        "first_conv": "stem.conv1.c",
+        "classifier": ("head.head.l", "head.head_dist.l"),
         **kwargs,
     }
 
 
 default_cfgs = generate_default_cfgs(
     {
-        'repvit_m1.dist_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m1.dist_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m2.dist_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m2.dist_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m3.dist_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m3.dist_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m0_9.dist_300e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m0_9.dist_300e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m0_9.dist_450e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m0_9.dist_450e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m1_0.dist_300e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m1_0.dist_300e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m1_0.dist_450e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m1_0.dist_450e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m1_1.dist_300e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m1_1.dist_300e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m1_1.dist_450e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m1_1.dist_450e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m1_5.dist_300e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m1_5.dist_300e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m1_5.dist_450e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m1_5.dist_450e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m2_3.dist_300e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m2_3.dist_300e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
-        'repvit_m2_3.dist_450e_in1k': _cfg(
-            hf_hub_id='timm/',
+        "repvit_m2_3.dist_450e_in1k": _cfg(
+            hf_hub_id="timm/",
         ),
     }
 )
 
 
 def _create_repvit(variant, pretrained=False, **kwargs):
-    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3))
+    out_indices = kwargs.pop("out_indices", (0, 1, 2, 3))
     model = build_model_with_cfg(
         RepVit,
         variant,
@@ -447,7 +511,9 @@ def repvit_m1(pretrained=False, **kwargs):
     Constructs a RepViT-M1 model
     """
     model_args = dict(embed_dim=(48, 96, 192, 384), depth=(2, 2, 14, 2), legacy=True)
-    return _create_repvit('repvit_m1', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_repvit(
+        "repvit_m1", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -456,7 +522,9 @@ def repvit_m2(pretrained=False, **kwargs):
     Constructs a RepViT-M2 model
     """
     model_args = dict(embed_dim=(64, 128, 256, 512), depth=(2, 2, 12, 2), legacy=True)
-    return _create_repvit('repvit_m2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_repvit(
+        "repvit_m2", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -465,7 +533,9 @@ def repvit_m3(pretrained=False, **kwargs):
     Constructs a RepViT-M3 model
     """
     model_args = dict(embed_dim=(64, 128, 256, 512), depth=(4, 4, 18, 2), legacy=True)
-    return _create_repvit('repvit_m3', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_repvit(
+        "repvit_m3", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -474,7 +544,9 @@ def repvit_m0_9(pretrained=False, **kwargs):
     Constructs a RepViT-M0.9 model
     """
     model_args = dict(embed_dim=(48, 96, 192, 384), depth=(2, 2, 14, 2))
-    return _create_repvit('repvit_m0_9', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_repvit(
+        "repvit_m0_9", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -483,7 +555,9 @@ def repvit_m1_0(pretrained=False, **kwargs):
     Constructs a RepViT-M1.0 model
     """
     model_args = dict(embed_dim=(56, 112, 224, 448), depth=(2, 2, 14, 2))
-    return _create_repvit('repvit_m1_0', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_repvit(
+        "repvit_m1_0", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -492,7 +566,9 @@ def repvit_m1_1(pretrained=False, **kwargs):
     Constructs a RepViT-M1.1 model
     """
     model_args = dict(embed_dim=(64, 128, 256, 512), depth=(2, 2, 12, 2))
-    return _create_repvit('repvit_m1_1', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_repvit(
+        "repvit_m1_1", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -501,7 +577,9 @@ def repvit_m1_5(pretrained=False, **kwargs):
     Constructs a RepViT-M1.5 model
     """
     model_args = dict(embed_dim=(64, 128, 256, 512), depth=(4, 4, 24, 4))
-    return _create_repvit('repvit_m1_5', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_repvit(
+        "repvit_m1_5", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
@@ -510,4 +588,6 @@ def repvit_m2_3(pretrained=False, **kwargs):
     Constructs a RepViT-M2.3 model
     """
     model_args = dict(embed_dim=(80, 160, 320, 640), depth=(6, 6, 34, 2))
-    return _create_repvit('repvit_m2_3', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_repvit(
+        "repvit_m2_3", pretrained=pretrained, **dict(model_args, **kwargs)
+    )

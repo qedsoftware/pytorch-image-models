@@ -4,6 +4,7 @@ Cosine LR schedule with warmup, cycle/restarts, noise, k-decay.
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
+
 import logging
 import math
 import numpy as np
@@ -28,23 +29,23 @@ class CosineLRScheduler(Scheduler):
     """
 
     def __init__(
-            self,
-            optimizer: torch.optim.Optimizer,
-            t_initial: int,
-            lr_min: float = 0.,
-            cycle_mul: float = 1.,
-            cycle_decay: float = 1.,
-            cycle_limit: int = 1,
-            warmup_t=0,
-            warmup_lr_init=0,
-            warmup_prefix=False,
-            t_in_epochs=True,
-            noise_range_t=None,
-            noise_pct=0.67,
-            noise_std=1.0,
-            noise_seed=42,
-            k_decay=1.0,
-            initialize=True,
+        self,
+        optimizer: torch.optim.Optimizer,
+        t_initial: int,
+        lr_min: float = 0.0,
+        cycle_mul: float = 1.0,
+        cycle_decay: float = 1.0,
+        cycle_limit: int = 1,
+        warmup_t=0,
+        warmup_lr_init=0,
+        warmup_prefix=False,
+        t_in_epochs=True,
+        noise_range_t=None,
+        noise_pct=0.67,
+        noise_std=1.0,
+        noise_seed=42,
+        k_decay=1.0,
+        initialize=True,
     ) -> None:
         super().__init__(
             optimizer,
@@ -62,7 +63,8 @@ class CosineLRScheduler(Scheduler):
         if t_initial == 1 and cycle_mul == 1 and cycle_decay == 1:
             _logger.warning(
                 "Cosine annealing scheduler will have no effect on the learning "
-                "rate since t_initial = t_mul = eta_mul = 1.")
+                "rate since t_initial = t_mul = eta_mul = 1."
+            )
         self.t_initial = t_initial
         self.lr_min = lr_min
         self.cycle_mul = cycle_mul
@@ -73,7 +75,9 @@ class CosineLRScheduler(Scheduler):
         self.warmup_prefix = warmup_prefix
         self.k_decay = k_decay
         if self.warmup_t:
-            self.warmup_steps = [(v - warmup_lr_init) / self.warmup_t for v in self.base_values]
+            self.warmup_steps = [
+                (v - warmup_lr_init) / self.warmup_t for v in self.base_values
+            ]
             super().update_groups(self.warmup_lr_init)
         else:
             self.warmup_steps = [1 for _ in self.base_values]
@@ -86,21 +90,30 @@ class CosineLRScheduler(Scheduler):
                 t = t - self.warmup_t
 
             if self.cycle_mul != 1:
-                i = math.floor(math.log(1 - t / self.t_initial * (1 - self.cycle_mul), self.cycle_mul))
-                t_i = self.cycle_mul ** i * self.t_initial
-                t_curr = t - (1 - self.cycle_mul ** i) / (1 - self.cycle_mul) * self.t_initial
+                i = math.floor(
+                    math.log(
+                        1 - t / self.t_initial * (1 - self.cycle_mul), self.cycle_mul
+                    )
+                )
+                t_i = self.cycle_mul**i * self.t_initial
+                t_curr = (
+                    t - (1 - self.cycle_mul**i) / (1 - self.cycle_mul) * self.t_initial
+                )
             else:
                 i = t // self.t_initial
                 t_i = self.t_initial
                 t_curr = t - (self.t_initial * i)
 
-            gamma = self.cycle_decay ** i
+            gamma = self.cycle_decay**i
             lr_max_values = [v * gamma for v in self.base_values]
             k = self.k_decay
 
             if i < self.cycle_limit:
                 lrs = [
-                    self.lr_min + 0.5 * (lr_max - self.lr_min) * (1 + math.cos(math.pi * t_curr ** k / t_i ** k))
+                    self.lr_min
+                    + 0.5
+                    * (lr_max - self.lr_min)
+                    * (1 + math.cos(math.pi * t_curr**k / t_i**k))
                     for lr_max in lr_max_values
                 ]
             else:
@@ -113,4 +126,10 @@ class CosineLRScheduler(Scheduler):
         if self.cycle_mul == 1.0:
             return self.t_initial * cycles
         else:
-            return int(math.floor(-self.t_initial * (self.cycle_mul ** cycles - 1) / (1 - self.cycle_mul)))
+            return int(
+                math.floor(
+                    -self.t_initial
+                    * (self.cycle_mul**cycles - 1)
+                    / (1 - self.cycle_mul)
+                )
+            )

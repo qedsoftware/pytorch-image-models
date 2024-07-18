@@ -9,8 +9,18 @@ import torch
 from torch import nn as nn
 from torch.utils.checkpoint import checkpoint
 
-__all__ = ['model_parameters', 'named_apply', 'named_modules', 'named_modules_with_params', 'adapt_input_conv',
-           'group_with_matcher', 'group_modules', 'group_parameters', 'flatten_modules', 'checkpoint_seq']
+__all__ = [
+    "model_parameters",
+    "named_apply",
+    "named_modules",
+    "named_modules_with_params",
+    "adapt_input_conv",
+    "group_with_matcher",
+    "group_modules",
+    "group_parameters",
+    "flatten_modules",
+    "checkpoint_seq",
+]
 
 
 def model_parameters(model: nn.Module, exclude_head: bool = False):
@@ -22,49 +32,64 @@ def model_parameters(model: nn.Module, exclude_head: bool = False):
 
 
 def named_apply(
-        fn: Callable,
-        module: nn.Module, name='',
-        depth_first: bool = True,
-        include_root: bool = False,
+    fn: Callable,
+    module: nn.Module,
+    name="",
+    depth_first: bool = True,
+    include_root: bool = False,
 ) -> nn.Module:
     if not depth_first and include_root:
         fn(module=module, name=name)
     for child_name, child_module in module.named_children():
-        child_name = '.'.join((name, child_name)) if name else child_name
-        named_apply(fn=fn, module=child_module, name=child_name, depth_first=depth_first, include_root=True)
+        child_name = ".".join((name, child_name)) if name else child_name
+        named_apply(
+            fn=fn,
+            module=child_module,
+            name=child_name,
+            depth_first=depth_first,
+            include_root=True,
+        )
     if depth_first and include_root:
         fn(module=module, name=name)
     return module
 
 
 def named_modules(
-        module: nn.Module,
-        name: str = '',
-        depth_first: bool = True,
-        include_root: bool = False,
+    module: nn.Module,
+    name: str = "",
+    depth_first: bool = True,
+    include_root: bool = False,
 ):
     if not depth_first and include_root:
         yield name, module
     for child_name, child_module in module.named_children():
-        child_name = '.'.join((name, child_name)) if name else child_name
+        child_name = ".".join((name, child_name)) if name else child_name
         yield from named_modules(
-            module=child_module, name=child_name, depth_first=depth_first, include_root=True)
+            module=child_module,
+            name=child_name,
+            depth_first=depth_first,
+            include_root=True,
+        )
     if depth_first and include_root:
         yield name, module
 
 
 def named_modules_with_params(
-        module: nn.Module,
-        name: str = '',
-        depth_first: bool = True,
-        include_root: bool = False,
+    module: nn.Module,
+    name: str = "",
+    depth_first: bool = True,
+    include_root: bool = False,
 ):
     if module._parameters and not depth_first and include_root:
         yield name, module
     for child_name, child_module in module.named_children():
-        child_name = '.'.join((name, child_name)) if name else child_name
+        child_name = ".".join((name, child_name)) if name else child_name
         yield from named_modules_with_params(
-            module=child_module, name=child_name, depth_first=depth_first, include_root=True)
+            module=child_module,
+            name=child_name,
+            depth_first=depth_first,
+            include_root=True,
+        )
     if module._parameters and depth_first and include_root:
         yield name, module
 
@@ -73,10 +98,10 @@ MATCH_PREV_GROUP = (99999,)
 
 
 def group_with_matcher(
-        named_objects: Iterator[Tuple[str, Any]],
-        group_matcher: Union[Dict, Callable],
-        return_values: bool = False,
-        reverse: bool = False
+    named_objects: Iterator[Tuple[str, Any]],
+    group_matcher: Union[Dict, Callable],
+    return_values: bool = False,
+    reverse: bool = False,
 ):
     if isinstance(group_matcher, dict):
         # dictionary matcher contains a dict of raw-string regex expr that must be compiled
@@ -101,11 +126,13 @@ def group_with_matcher(
                     parts = (prefix, r.groups(), suffix)
                     # map all tuple elem to int for numeric sort, filter out None entries
                     return tuple(map(float, chain.from_iterable(filter(None, parts))))
-            return float('inf'),  # un-matched layers (neck, head) mapped to largest ordinal
+            return (
+                float("inf"),
+            )  # un-matched layers (neck, head) mapped to largest ordinal
         else:
             ord = group_matcher(name)
             if not isinstance(ord, collections.abc.Iterable):
-                return ord,
+                return (ord,)
             return tuple(ord)
 
     # map layers into groups via ordinals (ints or tuples of ints) from matcher
@@ -134,34 +161,42 @@ def group_with_matcher(
 
 
 def group_parameters(
-        module: nn.Module,
-        group_matcher,
-        return_values: bool = False,
-        reverse: bool = False,
+    module: nn.Module,
+    group_matcher,
+    return_values: bool = False,
+    reverse: bool = False,
 ):
     return group_with_matcher(
-        module.named_parameters(), group_matcher, return_values=return_values, reverse=reverse)
+        module.named_parameters(),
+        group_matcher,
+        return_values=return_values,
+        reverse=reverse,
+    )
 
 
 def group_modules(
-        module: nn.Module,
-        group_matcher,
-        return_values: bool = False,
-        reverse: bool = False,
+    module: nn.Module,
+    group_matcher,
+    return_values: bool = False,
+    reverse: bool = False,
 ):
     return group_with_matcher(
-        named_modules_with_params(module), group_matcher, return_values=return_values, reverse=reverse)
+        named_modules_with_params(module),
+        group_matcher,
+        return_values=return_values,
+        reverse=reverse,
+    )
 
 
 def flatten_modules(
-        named_modules: Iterator[Tuple[str, nn.Module]],
-        depth: int = 1,
-        prefix: Union[str, Tuple[str, ...]] = '',
-        module_types: Union[str, Tuple[Type[nn.Module]]] = 'sequential',
+    named_modules: Iterator[Tuple[str, nn.Module]],
+    depth: int = 1,
+    prefix: Union[str, Tuple[str, ...]] = "",
+    module_types: Union[str, Tuple[Type[nn.Module]]] = "sequential",
 ):
     prefix_is_tuple = isinstance(prefix, tuple)
     if isinstance(module_types, str):
-        if module_types == 'container':
+        if module_types == "container":
             module_types = (nn.Sequential, nn.ModuleList, nn.ModuleDict)
         else:
             module_types = (nn.Sequential,)
@@ -179,17 +214,12 @@ def flatten_modules(
                 yield name, module
             else:
                 if prefix:
-                    name = '.'.join([prefix, name])
+                    name = ".".join([prefix, name])
                 yield name, module
 
 
 def checkpoint_seq(
-        functions,
-        x,
-        every=1,
-        flatten=False,
-        skip_last=False,
-        preserve_rng_state=True
+    functions, x, every=1, flatten=False, skip_last=False, preserve_rng_state=True
 ):
     r"""A helper function for checkpointing sequential models.
 
@@ -227,11 +257,13 @@ def checkpoint_seq(
         >>> model = nn.Sequential(...)
         >>> input_var = checkpoint_seq(model, input_var, every=2)
     """
+
     def run_function(start, end, functions):
         def forward(_x):
             for j in range(start, end + 1):
                 _x = functions[j](_x)
             return _x
+
         return forward
 
     if isinstance(functions, torch.nn.Sequential):
@@ -247,7 +279,11 @@ def checkpoint_seq(
     end = -1
     for start in range(0, num_checkpointed, every):
         end = min(start + every - 1, num_checkpointed - 1)
-        x = checkpoint(run_function(start, end, functions), x, preserve_rng_state=preserve_rng_state)
+        x = checkpoint(
+            run_function(start, end, functions),
+            x,
+            preserve_rng_state=preserve_rng_state,
+        )
     if skip_last:
         return run_function(end + 1, len(functions) - 1, functions)(x)
     return x
@@ -255,7 +291,9 @@ def checkpoint_seq(
 
 def adapt_input_conv(in_chans, conv_weight):
     conv_type = conv_weight.dtype
-    conv_weight = conv_weight.float()  # Some weights are in torch.half, ensure it's float for sum on CPU
+    conv_weight = (
+        conv_weight.float()
+    )  # Some weights are in torch.half, ensure it's float for sum on CPU
     O, I, J, K = conv_weight.shape
     if in_chans == 1:
         if I > 3:
@@ -267,12 +305,12 @@ def adapt_input_conv(in_chans, conv_weight):
             conv_weight = conv_weight.sum(dim=1, keepdim=True)
     elif in_chans != 3:
         if I != 3:
-            raise NotImplementedError('Weight format not supported by conversion.')
+            raise NotImplementedError("Weight format not supported by conversion.")
         else:
             # NOTE this strategy should be better than random init, but there could be other combinations of
             # the original RGB input layer weights that'd work better for specific cases.
             repeat = int(math.ceil(in_chans / 3))
             conv_weight = conv_weight.repeat(1, repeat, 1, 1)[:, :in_chans, :, :]
-            conv_weight *= (3 / float(in_chans))
+            conv_weight *= 3 / float(in_chans)
     conv_weight = conv_weight.to(conv_type)
     return conv_weight

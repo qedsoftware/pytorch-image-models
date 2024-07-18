@@ -4,6 +4,7 @@ Based on Numpy example at https://github.com/google-research/reassessed-imagenet
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+
 import os
 import json
 import numpy as np
@@ -18,8 +19,14 @@ class RealLabelsImagenet:
                 real_labels = json.load(real_labels)
         else:
             real_labels = json.loads(
-                pkgutil.get_data(__name__, os.path.join('_info', 'imagenet_real_labels.json')).decode('utf-8'))
-        real_labels = {f'ILSVRC2012_val_{i + 1:08d}.JPEG': labels for i, labels in enumerate(real_labels)}
+                pkgutil.get_data(
+                    __name__, os.path.join("_info", "imagenet_real_labels.json")
+                ).decode("utf-8")
+            )
+        real_labels = {
+            f"ILSVRC2012_val_{i + 1:08d}.JPEG": labels
+            for i, labels in enumerate(real_labels)
+        }
         self.real_labels = real_labels
         self.filenames = filenames
         assert len(self.filenames) == len(self.real_labels)
@@ -37,7 +44,8 @@ class RealLabelsImagenet:
             if self.real_labels[filename]:
                 for k in self.topk:
                     self.is_correct[k].append(
-                        any([p in self.real_labels[filename] for p in pred[:k]]))
+                        any([p in self.real_labels[filename] for p in pred[:k]])
+                    )
             self.sample_idx += 1
 
     def get_accuracy(self, k=None):

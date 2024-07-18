@@ -6,10 +6,11 @@ from timm.layers import create_act_layer, set_layer_config
 import importlib
 import os
 
-torch_backend = os.environ.get('TORCH_BACKEND')
+torch_backend = os.environ.get("TORCH_BACKEND")
 if torch_backend is not None:
     importlib.import_module(torch_backend)
-torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
+torch_device = os.environ.get("TORCH_DEVICE", "cpu")
+
 
 class MLP(nn.Module):
     def __init__(self, act_layer="relu", inplace=True):
@@ -29,7 +30,7 @@ def _run_act_layer_grad(act_type, inplace=True):
     x = torch.rand(10, 1000) * 10
     m = MLP(act_layer=act_type, inplace=inplace)
 
-    def _run(x, act_layer=''):
+    def _run(x, act_layer=""):
         if act_layer:
             # replace act layer if set
             m.act = create_act_layer(act_layer, inplace=inplace)
@@ -55,24 +56,24 @@ def _run_act_layer_grad(act_type, inplace=True):
 
 def test_swish_grad():
     for _ in range(100):
-        _run_act_layer_grad('swish')
+        _run_act_layer_grad("swish")
 
 
 def test_mish_grad():
     for _ in range(100):
-        _run_act_layer_grad('mish')
+        _run_act_layer_grad("mish")
 
 
 def test_hard_sigmoid_grad():
     for _ in range(100):
-        _run_act_layer_grad('hard_sigmoid', inplace=None)
+        _run_act_layer_grad("hard_sigmoid", inplace=None)
 
 
 def test_hard_swish_grad():
     for _ in range(100):
-        _run_act_layer_grad('hard_swish')
+        _run_act_layer_grad("hard_swish")
 
 
 def test_hard_mish_grad():
     for _ in range(100):
-        _run_act_layer_grad('hard_mish')
+        _run_act_layer_grad("hard_mish")

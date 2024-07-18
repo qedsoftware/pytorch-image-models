@@ -1,5 +1,6 @@
 """ Dataset reader for HF IterableDataset
 """
+
 import math
 import os
 from itertools import repeat, chain
@@ -23,27 +24,27 @@ from .reader import Reader
 from .shared_count import SharedCount
 
 
-SHUFFLE_SIZE = int(os.environ.get('HFIDS_SHUFFLE_SIZE', 4096))
+SHUFFLE_SIZE = int(os.environ.get("HFIDS_SHUFFLE_SIZE", 4096))
 
 
 class ReaderHfids(Reader):
     def __init__(
-            self,
-            name: str,
-            root: Optional[str] = None,
-            split: str = 'train',
-            is_training: bool = False,
-            batch_size: int = 1,
-            download: bool = False,
-            repeats: int = 0,
-            seed: int = 42,
-            class_map: Optional[dict] = None,
-            input_key: str = 'image',
-            input_img_mode: str = 'RGB',
-            target_key: str = 'label',
-            target_img_mode: str = '',
-            shuffle_size: Optional[int] = None,
-            num_samples: Optional[int] = None,
+        self,
+        name: str,
+        root: Optional[str] = None,
+        split: str = "train",
+        is_training: bool = False,
+        batch_size: int = 1,
+        download: bool = False,
+        repeats: int = 0,
+        seed: int = 42,
+        class_map: Optional[dict] = None,
+        input_key: str = "image",
+        input_img_mode: str = "RGB",
+        target_key: str = "label",
+        target_img_mode: str = "",
+        shuffle_size: Optional[int] = None,
+        num_samples: Optional[int] = None,
     ):
         super().__init__()
         self.root = root
@@ -52,7 +53,9 @@ class ReaderHfids(Reader):
         self.batch_size = batch_size
         self.download = download
         self.repeats = repeats
-        self.common_seed = seed  # a seed that's fixed across all worker / distributed instances
+        self.common_seed = (
+            seed  # a seed that's fixed across all worker / distributed instances
+        )
         self.shuffle_size = shuffle_size or SHUFFLE_SIZE
 
         self.input_key = input_key
@@ -109,8 +112,8 @@ class ReaderHfids(Reader):
         self.epoch.value = count
 
     def set_loader_cfg(
-            self,
-            num_workers: Optional[int] = None,
+        self,
+        num_workers: Optional[int] = None,
     ):
         if self.ds is not None:
             return
@@ -119,8 +122,7 @@ class ReaderHfids(Reader):
             self.global_num_workers = self.dist_num_replicas * self.num_workers
 
     def _lazy_init(self):
-        """ Lazily initialize worker (in worker processes)
-        """
+        """Lazily initialize worker (in worker processes)"""
         if self.worker_info is None:
             worker_info = torch.utils.data.get_worker_info()
             if worker_info is not None:
@@ -149,15 +151,22 @@ class ReaderHfids(Reader):
 
         # Workers:
         # In a node, datasets.IterableDataset assigns the shards assigned to the node as evenly as possible to workers.
-        self.ds = split_dataset_by_node(ds, rank=self.dist_rank, world_size=self.dist_num_replicas)
+        self.ds = split_dataset_by_node(
+            ds, rank=self.dist_rank, world_size=self.dist_num_replicas
+        )
 
     def _num_samples_per_worker(self):
-        num_worker_samples = \
-            max(1, self.repeats) * self.num_samples / max(self.global_num_workers, self.dist_num_replicas)
+        num_worker_samples = (
+            max(1, self.repeats)
+            * self.num_samples
+            / max(self.global_num_workers, self.dist_num_replicas)
+        )
         if self.is_training or self.dist_num_replicas > 1:
             num_worker_samples = math.ceil(num_worker_samples)
         if self.is_training and self.batch_size is not None:
-            num_worker_samples = math.ceil(num_worker_samples / self.batch_size) * self.batch_size
+            num_worker_samples = (
+                math.ceil(num_worker_samples / self.batch_size) * self.batch_size
+            )
         return int(num_worker_samples)
 
     def __iter__(self):
@@ -178,7 +187,9 @@ class ReaderHfids(Reader):
                 input_data = input_data.convert(self.input_img_mode)
             target_data = sample[self.target_key]
             if self.target_img_mode:
-                assert isinstance(target_data, Image.Image), "target_img_mode is specified but target is not an image"
+                assert isinstance(
+                    target_data, Image.Image
+                ), "target_img_mode is specified but target is not an image"
                 if target_data.mode != self.target_img_mode:
                     target_data = target_data.convert(self.target_img_mode)
             elif self.remap_class:
@@ -196,19 +207,19 @@ class ReaderHfids(Reader):
         assert False, "Not supported"  # no random access to examples
 
     def filenames(self, basename=False, absolute=False):
-        """ Return all filenames in dataset, overrides base"""
+        """Return all filenames in dataset, overrides base"""
         if self.ds is None:
             self._lazy_init()
         names = []
         for sample in self.ds:
-            if 'file_name' in sample:
-                name = sample['file_name']
-            elif 'filename' in sample:
-                name = sample['filename']
-            elif 'id' in sample:
-                name = sample['id']
-            elif 'image_id' in sample:
-                name = sample['image_id']
+            if "file_name" in sample:
+                name = sample["file_name"]
+            elif "filename" in sample:
+                name = sample["filename"]
+            elif "id" in sample:
+                name = sample["id"]
+            elif "image_id" in sample:
+                name = sample["image_id"]
             else:
                 assert False, "No supported name field present"
             names.append(name)

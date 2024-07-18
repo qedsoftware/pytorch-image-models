@@ -5,6 +5,7 @@ on the folder hierarchy, just leaf folders by default.
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+
 import os
 from typing import Dict, List, Optional, Set, Tuple, Union
 
@@ -16,13 +17,13 @@ from .reader import Reader
 
 
 def find_images_and_targets(
-        folder: str,
-        types: Optional[Union[List, Tuple, Set]] = None,
-        class_to_idx: Optional[Dict] = None,
-        leaf_name_only: bool = True,
-        sort: bool = True
+    folder: str,
+    types: Optional[Union[List, Tuple, Set]] = None,
+    class_to_idx: Optional[Dict] = None,
+    leaf_name_only: bool = True,
+    sort: bool = True,
 ):
-    """ Walk folder recursively to discover images and map them to classes by folder names.
+    """Walk folder recursively to discover images and map them to classes by folder names.
 
     Args:
         folder: root of folder to recrusively search
@@ -38,8 +39,12 @@ def find_images_and_targets(
     labels = []
     filenames = []
     for root, subdirs, files in os.walk(folder, topdown=False, followlinks=True):
-        rel_path = os.path.relpath(root, folder) if (root != folder) else ''
-        label = os.path.basename(rel_path) if leaf_name_only else rel_path.replace(os.path.sep, '_')
+        rel_path = os.path.relpath(root, folder) if (root != folder) else ""
+        label = (
+            os.path.basename(rel_path)
+            if leaf_name_only
+            else rel_path.replace(os.path.sep, "_")
+        )
         for f in files:
             base, ext = os.path.splitext(f)
             if ext.lower() in types:
@@ -50,7 +55,9 @@ def find_images_and_targets(
         unique_labels = set(labels)
         sorted_labels = list(sorted(unique_labels, key=natural_key))
         class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    images_and_targets = [(f, class_to_idx[l]) for f, l in zip(filenames, labels) if l in class_to_idx]
+    images_and_targets = [
+        (f, class_to_idx[l]) for f, l in zip(filenames, labels) if l in class_to_idx
+    ]
     if sort:
         images_and_targets = sorted(images_and_targets, key=lambda k: natural_key(k[0]))
     return images_and_targets, class_to_idx
@@ -59,10 +66,10 @@ def find_images_and_targets(
 class ReaderImageFolder(Reader):
 
     def __init__(
-            self,
-            root,
-            class_map='',
-            input_key=None,
+        self,
+        root,
+        class_map="",
+        input_key=None,
     ):
         super().__init__()
 
@@ -72,7 +79,7 @@ class ReaderImageFolder(Reader):
             class_to_idx = load_class_map(class_map, root)
         find_types = None
         if input_key:
-            find_types = input_key.split(';')
+            find_types = input_key.split(";")
         self.samples, self.class_to_idx = find_images_and_targets(
             root,
             class_to_idx=class_to_idx,
@@ -80,12 +87,13 @@ class ReaderImageFolder(Reader):
         )
         if len(self.samples) == 0:
             raise RuntimeError(
-                f'Found 0 images in subfolders of {root}. '
-                f'Supported image extensions are {", ".join(get_img_extensions())}')
+                f"Found 0 images in subfolders of {root}. "
+                f'Supported image extensions are {", ".join(get_img_extensions())}'
+            )
 
     def __getitem__(self, index):
         path, target = self.samples[index]
-        return open(path, 'rb'), target
+        return open(path, "rb"), target
 
     def __len__(self):
         return len(self.samples)

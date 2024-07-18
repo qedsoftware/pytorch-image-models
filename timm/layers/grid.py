@@ -20,7 +20,7 @@ def ndgrid(*tensors) -> Tuple[torch.Tensor, ...]:
 
     """
     try:
-        return torch.meshgrid(*tensors, indexing='ij')
+        return torch.meshgrid(*tensors, indexing="ij")
     except TypeError:
         # old PyTorch < 1.10 will follow this path as it does not have indexing arg,
         # the old behaviour of meshgrid was 'ij'
@@ -45,5 +45,4 @@ def meshgrid(*tensors) -> Tuple[torch.Tensor, ...]:
 
     # NOTE: this will throw in PyTorch < 1.10 as meshgrid did not support indexing arg or have
     # capability of generating grid in xy order before then.
-    return torch.meshgrid(*tensors, indexing='xy')
-
+    return torch.meshgrid(*tensors, indexing="xy")

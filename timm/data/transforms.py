@@ -6,8 +6,10 @@ from typing import List, Sequence, Tuple, Union
 
 import torch
 import torchvision.transforms.functional as F
+
 try:
     from torchvision.transforms.functional import InterpolationMode
+
     has_interpolation_mode = True
 except ImportError:
     has_interpolation_mode = False
@@ -15,9 +17,19 @@ from PIL import Image
 import numpy as np
 
 __all__ = [
-    "ToNumpy", "ToTensor", "str_to_interp_mode", "str_to_pil_interp", "interp_mode_to_str",
-    "RandomResizedCropAndInterpolation", "CenterCropOrPad", "center_crop_or_pad", "crop_or_pad",
-    "RandomCropOrPad", "RandomPad", "ResizeKeepRatio", "TrimBorder"
+    "ToNumpy",
+    "ToTensor",
+    "str_to_interp_mode",
+    "str_to_pil_interp",
+    "interp_mode_to_str",
+    "RandomResizedCropAndInterpolation",
+    "CenterCropOrPad",
+    "center_crop_or_pad",
+    "crop_or_pad",
+    "RandomCropOrPad",
+    "RandomPad",
+    "ResizeKeepRatio",
+    "TrimBorder",
 ]
 
 
@@ -32,7 +44,8 @@ class ToNumpy:
 
 
 class ToTensor:
-    """ ToTensor with no rescaling of values"""
+    """ToTensor with no rescaling of values"""
+
     def __init__(self, dtype=torch.float32):
         self.dtype = dtype
 
@@ -45,21 +58,21 @@ class ToTensor:
 # removed in Pillow 10.
 if hasattr(Image, "Resampling"):
     _pil_interpolation_to_str = {
-        Image.Resampling.NEAREST: 'nearest',
-        Image.Resampling.BILINEAR: 'bilinear',
-        Image.Resampling.BICUBIC: 'bicubic',
-        Image.Resampling.BOX: 'box',
-        Image.Resampling.HAMMING: 'hamming',
-        Image.Resampling.LANCZOS: 'lanczos',
+        Image.Resampling.NEAREST: "nearest",
+        Image.Resampling.BILINEAR: "bilinear",
+        Image.Resampling.BICUBIC: "bicubic",
+        Image.Resampling.BOX: "box",
+        Image.Resampling.HAMMING: "hamming",
+        Image.Resampling.LANCZOS: "lanczos",
     }
 else:
     _pil_interpolation_to_str = {
-        Image.NEAREST: 'nearest',
-        Image.BILINEAR: 'bilinear',
-        Image.BICUBIC: 'bicubic',
-        Image.BOX: 'box',
-        Image.HAMMING: 'hamming',
-        Image.LANCZOS: 'lanczos',
+        Image.NEAREST: "nearest",
+        Image.BILINEAR: "bilinear",
+        Image.BICUBIC: "bicubic",
+        Image.BOX: "box",
+        Image.HAMMING: "hamming",
+        Image.LANCZOS: "lanczos",
     }
 
 _str_to_pil_interpolation = {b: a for a, b in _pil_interpolation_to_str.items()}
@@ -67,12 +80,12 @@ _str_to_pil_interpolation = {b: a for a, b in _pil_interpolation_to_str.items()}
 
 if has_interpolation_mode:
     _torch_interpolation_to_str = {
-        InterpolationMode.NEAREST: 'nearest',
-        InterpolationMode.BILINEAR: 'bilinear',
-        InterpolationMode.BICUBIC: 'bicubic',
-        InterpolationMode.BOX: 'box',
-        InterpolationMode.HAMMING: 'hamming',
-        InterpolationMode.LANCZOS: 'lanczos',
+        InterpolationMode.NEAREST: "nearest",
+        InterpolationMode.BILINEAR: "bilinear",
+        InterpolationMode.BICUBIC: "bicubic",
+        InterpolationMode.BOX: "box",
+        InterpolationMode.HAMMING: "hamming",
+        InterpolationMode.LANCZOS: "lanczos",
     }
     _str_to_torch_interpolation = {b: a for a, b in _torch_interpolation_to_str.items()}
 else:
@@ -98,7 +111,7 @@ def interp_mode_to_str(mode):
         return _pil_interpolation_to_str[mode]
 
 
-_RANDOM_INTERPOLATION = (str_to_interp_mode('bilinear'), str_to_interp_mode('bicubic'))
+_RANDOM_INTERPOLATION = (str_to_interp_mode("bilinear"), str_to_interp_mode("bicubic"))
 
 
 def _setup_size(size, error_msg="Please provide only two dimensions (h, w) for size."):
@@ -130,11 +143,11 @@ class RandomResizedCropAndInterpolation:
     """
 
     def __init__(
-            self,
-            size,
-            scale=(0.08, 1.0),
-            ratio=(3. / 4., 4. / 3.),
-            interpolation='bilinear',
+        self,
+        size,
+        scale=(0.08, 1.0),
+        ratio=(3.0 / 4.0, 4.0 / 3.0),
+        interpolation="bilinear",
     ):
         if isinstance(size, (list, tuple)):
             self.size = tuple(size)
@@ -143,7 +156,7 @@ class RandomResizedCropAndInterpolation:
         if (scale[0] > scale[1]) or (ratio[0] > ratio[1]):
             warnings.warn("range should be of kind (min, max)")
 
-        if interpolation == 'random':
+        if interpolation == "random":
             self.interpolation = _RANDOM_INTERPOLATION
         else:
             self.interpolation = str_to_interp_mode(interpolation)
@@ -210,21 +223,23 @@ class RandomResizedCropAndInterpolation:
 
     def __repr__(self):
         if isinstance(self.interpolation, (tuple, list)):
-            interpolate_str = ' '.join([interp_mode_to_str(x) for x in self.interpolation])
+            interpolate_str = " ".join(
+                [interp_mode_to_str(x) for x in self.interpolation]
+            )
         else:
             interpolate_str = interp_mode_to_str(self.interpolation)
-        format_string = self.__class__.__name__ + '(size={0}'.format(self.size)
-        format_string += ', scale={0}'.format(tuple(round(s, 4) for s in self.scale))
-        format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))
-        format_string += ', interpolation={0})'.format(interpolate_str)
+        format_string = self.__class__.__name__ + "(size={0}".format(self.size)
+        format_string += ", scale={0}".format(tuple(round(s, 4) for s in self.scale))
+        format_string += ", ratio={0}".format(tuple(round(r, 4) for r in self.ratio))
+        format_string += ", interpolation={0})".format(interpolate_str)
         return format_string
 
 
 def center_crop_or_pad(
-        img: torch.Tensor,
-        output_size: Union[int, List[int]],
-        fill: Union[int, Tuple[int, int, int]] = 0,
-        padding_mode: str = 'constant',
+    img: torch.Tensor,
+    output_size: Union[int, List[int]],
+    fill: Union[int, Tuple[int, int, int]] = 0,
+    padding_mode: str = "constant",
 ) -> torch.Tensor:
     """Center crops and/or pads the given image.
 
@@ -275,10 +290,10 @@ class CenterCropOrPad(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            size: Union[int, List[int]],
-            fill: Union[int, Tuple[int, int, int]] = 0,
-            padding_mode: str = 'constant',
+        self,
+        size: Union[int, List[int]],
+        fill: Union[int, Tuple[int, int, int]] = 0,
+        padding_mode: str = "constant",
     ):
         super().__init__()
         self.size = _setup_size(size)
@@ -293,23 +308,24 @@ class CenterCropOrPad(torch.nn.Module):
         Returns:
             PIL Image or Tensor: Cropped image.
         """
-        return center_crop_or_pad(img, self.size, fill=self.fill, padding_mode=self.padding_mode)
+        return center_crop_or_pad(
+            img, self.size, fill=self.fill, padding_mode=self.padding_mode
+        )
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(size={self.size})"
 
 
 def crop_or_pad(
-        img: torch.Tensor,
-        top: int,
-        left: int,
-        height: int,
-        width: int,
-        fill: Union[int, Tuple[int, int, int]] = 0,
-        padding_mode: str = 'constant',
+    img: torch.Tensor,
+    top: int,
+    left: int,
+    height: int,
+    width: int,
+    fill: Union[int, Tuple[int, int, int]] = 0,
+    padding_mode: str = "constant",
 ) -> torch.Tensor:
-    """ Crops and/or pads image to meet target size, with control over fill and padding_mode.
-    """
+    """Crops and/or pads image to meet target size, with control over fill and padding_mode."""
     _, image_height, image_width = F.get_dimensions(img)
     right = left + width
     bottom = top + height
@@ -328,14 +344,13 @@ def crop_or_pad(
 
 
 class RandomCropOrPad(torch.nn.Module):
-    """ Crop and/or pad image with random placement within the crop or pad margin.
-    """
+    """Crop and/or pad image with random placement within the crop or pad margin."""
 
     def __init__(
-            self,
-            size: Union[int, List[int]],
-            fill: Union[int, Tuple[int, int, int]] = 0,
-            padding_mode: str = 'constant',
+        self,
+        size: Union[int, List[int]],
+        fill: Union[int, Tuple[int, int, int]] = 0,
+        padding_mode: str = "constant",
     ):
         super().__init__()
         self.size = _setup_size(size)
@@ -397,19 +412,18 @@ class RandomPad:
 
 
 class ResizeKeepRatio:
-    """ Resize and Keep Aspect Ratio
-    """
+    """Resize and Keep Aspect Ratio"""
 
     def __init__(
-            self,
-            size,
-            longest=0.,
-            interpolation='bilinear',
-            random_scale_prob=0.,
-            random_scale_range=(0.85, 1.05),
-            random_scale_area=False,
-            random_aspect_prob=0.,
-            random_aspect_range=(0.9, 1.11),
+        self,
+        size,
+        longest=0.0,
+        interpolation="bilinear",
+        random_scale_prob=0.0,
+        random_scale_range=(0.85, 1.05),
+        random_scale_area=False,
+        random_aspect_prob=0.0,
+        random_aspect_range=(0.9, 1.11),
     ):
         """
 
@@ -427,7 +441,7 @@ class ResizeKeepRatio:
             self.size = tuple(size)
         else:
             self.size = (size, size)
-        if interpolation == 'random':
+        if interpolation == "random":
             self.interpolation = _RANDOM_INTERPOLATION
         else:
             self.interpolation = str_to_interp_mode(interpolation)
@@ -440,40 +454,47 @@ class ResizeKeepRatio:
 
     @staticmethod
     def get_params(
-            img,
-            target_size,
-            longest,
-            random_scale_prob=0.,
-            random_scale_range=(1.0, 1.33),
-            random_scale_area=False,
-            random_aspect_prob=0.,
-            random_aspect_range=(0.9, 1.11)
+        img,
+        target_size,
+        longest,
+        random_scale_prob=0.0,
+        random_scale_range=(1.0, 1.33),
+        random_scale_area=False,
+        random_aspect_prob=0.0,
+        random_aspect_range=(0.9, 1.11),
     ):
-        """Get parameters
-        """
+        """Get parameters"""
         img_h, img_w = img_size = F.get_dimensions(img)[1:]
         target_h, target_w = target_size
         ratio_h = img_h / target_h
         ratio_w = img_w / target_w
-        ratio = max(ratio_h, ratio_w) * longest + min(ratio_h, ratio_w) * (1. - longest)
+        ratio = max(ratio_h, ratio_w) * longest + min(ratio_h, ratio_w) * (
+            1.0 - longest
+        )
 
         if random_scale_prob > 0 and random.random() < random_scale_prob:
             ratio_factor = random.uniform(random_scale_range[0], random_scale_range[1])
             if random_scale_area:
                 # make ratio factor equivalent to RRC area crop where < 1.0 = area zoom,
                 # otherwise like affine scale where < 1.0 = linear zoom out
-                ratio_factor = 1. / math.sqrt(ratio_factor)
+                ratio_factor = 1.0 / math.sqrt(ratio_factor)
             ratio_factor = (ratio_factor, ratio_factor)
         else:
-            ratio_factor = (1., 1.)
+            ratio_factor = (1.0, 1.0)
 
         if random_aspect_prob > 0 and random.random() < random_aspect_prob:
-            log_aspect = (math.log(random_aspect_range[0]), math.log(random_aspect_range[1]))
+            log_aspect = (
+                math.log(random_aspect_range[0]),
+                math.log(random_aspect_range[1]),
+            )
             aspect_factor = math.exp(random.uniform(*log_aspect))
             aspect_factor = math.sqrt(aspect_factor)
             # currently applying random aspect adjustment equally to both dims,
             # could change to keep output sizes above their target where possible
-            ratio_factor = (ratio_factor[0] / aspect_factor, ratio_factor[1] * aspect_factor)
+            ratio_factor = (
+                ratio_factor[0] / aspect_factor,
+                ratio_factor[1] * aspect_factor,
+            )
 
         size = [round(x * f / ratio) for x, f in zip(img_size, ratio_factor)]
         return size
@@ -487,9 +508,14 @@ class ResizeKeepRatio:
             PIL Image: Resized, padded to at least target size, possibly cropped to exactly target size
         """
         size = self.get_params(
-            img, self.size, self.longest,
-            self.random_scale_prob, self.random_scale_range, self.random_scale_area,
-            self.random_aspect_prob, self.random_aspect_range
+            img,
+            self.size,
+            self.longest,
+            self.random_scale_prob,
+            self.random_scale_range,
+            self.random_scale_area,
+            self.random_aspect_prob,
+            self.random_aspect_range,
         )
         if isinstance(self.interpolation, (tuple, list)):
             interpolation = random.choice(self.interpolation)
@@ -500,26 +526,32 @@ class ResizeKeepRatio:
 
     def __repr__(self):
         if isinstance(self.interpolation, (tuple, list)):
-            interpolate_str = ' '.join([interp_mode_to_str(x) for x in self.interpolation])
+            interpolate_str = " ".join(
+                [interp_mode_to_str(x) for x in self.interpolation]
+            )
         else:
             interpolate_str = interp_mode_to_str(self.interpolation)
-        format_string = self.__class__.__name__ + '(size={0}'.format(self.size)
-        format_string += f', interpolation={interpolate_str}'
-        format_string += f', longest={self.longest:.3f}'
-        format_string += f', random_scale_prob={self.random_scale_prob:.3f}'
-        format_string += f', random_scale_range=(' \
-                         f'{self.random_scale_range[0]:.3f}, {self.random_aspect_range[1]:.3f})'
-        format_string += f', random_aspect_prob={self.random_aspect_prob:.3f}'
-        format_string += f', random_aspect_range=(' \
-                         f'{self.random_aspect_range[0]:.3f}, {self.random_aspect_range[1]:.3f}))'
+        format_string = self.__class__.__name__ + "(size={0}".format(self.size)
+        format_string += f", interpolation={interpolate_str}"
+        format_string += f", longest={self.longest:.3f}"
+        format_string += f", random_scale_prob={self.random_scale_prob:.3f}"
+        format_string += (
+            f", random_scale_range=("
+            f"{self.random_scale_range[0]:.3f}, {self.random_aspect_range[1]:.3f})"
+        )
+        format_string += f", random_aspect_prob={self.random_aspect_prob:.3f}"
+        format_string += (
+            f", random_aspect_range=("
+            f"{self.random_aspect_range[0]:.3f}, {self.random_aspect_range[1]:.3f}))"
+        )
         return format_string
 
 
 class TrimBorder(torch.nn.Module):
 
     def __init__(
-            self,
-            border_size: int,
+        self,
+        border_size: int,
     ):
         super().__init__()
         self.border_size = border_size

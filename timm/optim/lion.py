@@ -2,6 +2,7 @@
 Paper: `Symbolic Discovery of Optimization Algorithms` - https://arxiv.org/abs/2302.06675
 Original Impl: https://github.com/google/automl/tree/master/lion
 """
+
 # Copyright 2023 Google Research. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,13 +27,13 @@ class Lion(Optimizer):
     r"""Implements Lion algorithm."""
 
     def __init__(
-            self,
-            params,
-            lr=1e-4,
-            betas=(0.9, 0.99),
-            weight_decay=0.0,
-            maximize=False,
-            foreach=None,
+        self,
+        params,
+        lr=1e-4,
+        betas=(0.9, 0.99),
+        weight_decay=0.0,
+        maximize=False,
+        foreach=None,
     ):
         """Initialize the hyperparameters.
 
@@ -46,11 +47,11 @@ class Lion(Optimizer):
         """
 
         if not 0.0 <= lr:
-            raise ValueError('Invalid learning rate: {}'.format(lr))
+            raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= betas[0] < 1.0:
-            raise ValueError('Invalid beta parameter at index 0: {}'.format(betas[0]))
+            raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))
         if not 0.0 <= betas[1] < 1.0:
-            raise ValueError('Invalid beta parameter at index 1: {}'.format(betas[1]))
+            raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
         defaults = dict(
             lr=lr,
             betas=betas,
@@ -63,8 +64,8 @@ class Lion(Optimizer):
     def __setstate__(self, state):
         super().__setstate__(state)
         for group in self.param_groups:
-            group.setdefault('maximize', False)
-            group.setdefault('foreach', None)
+            group.setdefault("maximize", False)
+            group.setdefault("foreach", None)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -86,23 +87,25 @@ class Lion(Optimizer):
             params_with_grad = []
             grads = []
             exp_avgs = []
-            beta1, beta2 = group['betas']
+            beta1, beta2 = group["betas"]
 
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
                 params_with_grad.append(p)
                 if p.grad.is_sparse:
-                    raise RuntimeError('Lion does not support sparse gradients')
+                    raise RuntimeError("Lion does not support sparse gradients")
                 grads.append(p.grad)
 
                 state = self.state[p]
 
                 # State initialization
                 if len(state) == 0:
-                    state['exp_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    state["exp_avg"] = torch.zeros_like(
+                        p, memory_format=torch.preserve_format
+                    )
 
-                exp_avgs.append(state['exp_avg'])
+                exp_avgs.append(state["exp_avg"])
 
             lion(
                 params_with_grad,
@@ -110,37 +113,36 @@ class Lion(Optimizer):
                 exp_avgs,
                 beta1=beta1,
                 beta2=beta2,
-                lr=group['lr'],
-                weight_decay=group['weight_decay'],
-                maximize=group['maximize'],
-                foreach=group['foreach'],
+                lr=group["lr"],
+                weight_decay=group["weight_decay"],
+                maximize=group["maximize"],
+                foreach=group["foreach"],
             )
 
         return loss
 
 
 def lion(
-        params: List[torch.Tensor],
-        grads: List[torch.Tensor],
-        exp_avgs: List[torch.Tensor],
-        # kwonly args with defaults are not supported by functions compiled with torchscript issue #70627
-        # setting this as kwarg for now as functional API is compiled by torch/distributed/optim
-        maximize: bool = False,
-        foreach: bool = None,
-        *,
-        beta1: float,
-        beta2: float,
-        lr: float,
-        weight_decay: float,
+    params: List[torch.Tensor],
+    grads: List[torch.Tensor],
+    exp_avgs: List[torch.Tensor],
+    # kwonly args with defaults are not supported by functions compiled with torchscript issue #70627
+    # setting this as kwarg for now as functional API is compiled by torch/distributed/optim
+    maximize: bool = False,
+    foreach: bool = None,
+    *,
+    beta1: float,
+    beta2: float,
+    lr: float,
+    weight_decay: float,
 ):
-    r"""Functional API that performs Lion algorithm computation.
-    """
+    r"""Functional API that performs Lion algorithm computation."""
     if foreach is None:
         # Placeholder for more complex foreach logic to be added when value is not set
         foreach = False
 
     if foreach and torch.jit.is_scripting():
-        raise RuntimeError('torch.jit.script not supported with foreach optimizers')
+        raise RuntimeError("torch.jit.script not supported with foreach optimizers")
 
     if foreach and not torch.jit.is_scripting():
         func = _multi_tensor_lion
@@ -160,15 +162,15 @@ def lion(
 
 
 def _single_tensor_lion(
-        params: List[torch.Tensor],
-        grads: List[torch.Tensor],
-        exp_avgs: List[torch.Tensor],
-        *,
-        beta1: float,
-        beta2: float,
-        lr: float,
-        weight_decay: float,
-        maximize: bool,
+    params: List[torch.Tensor],
+    grads: List[torch.Tensor],
+    exp_avgs: List[torch.Tensor],
+    *,
+    beta1: float,
+    beta2: float,
+    lr: float,
+    weight_decay: float,
+    maximize: bool,
 ):
     for i, param in enumerate(params):
         grad = grads[i] if not maximize else -grads[i]
@@ -191,15 +193,15 @@ def _single_tensor_lion(
 
 
 def _multi_tensor_lion(
-        params: List[torch.Tensor],
-        grads: List[torch.Tensor],
-        exp_avgs: List[torch.Tensor],
-        *,
-        beta1: float,
-        beta2: float,
-        lr: float,
-        weight_decay: float,
-        maximize: bool,
+    params: List[torch.Tensor],
+    grads: List[torch.Tensor],
+    exp_avgs: List[torch.Tensor],
+    *,
+    beta1: float,
+    beta2: float,
+    lr: float,
+    weight_decay: float,
+    maximize: bool,
 ):
     if len(params) == 0:
         return

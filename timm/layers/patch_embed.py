@@ -8,6 +8,7 @@ Based on code in:
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+
 import logging
 import math
 from typing import Callable, List, Optional, Tuple, Union
@@ -24,29 +25,31 @@ _logger = logging.getLogger(__name__)
 
 
 class PatchEmbed(nn.Module):
-    """ 2D Image to Patch Embedding
-    """
+    """2D Image to Patch Embedding"""
+
     output_fmt: Format
     dynamic_img_pad: torch.jit.Final[bool]
 
     def __init__(
-            self,
-            img_size: Optional[int] = 224,
-            patch_size: int = 16,
-            in_chans: int = 3,
-            embed_dim: int = 768,
-            norm_layer: Optional[Callable] = None,
-            flatten: bool = True,
-            output_fmt: Optional[str] = None,
-            bias: bool = True,
-            strict_img_size: bool = True,
-            dynamic_img_pad: bool = False,
+        self,
+        img_size: Optional[int] = 224,
+        patch_size: int = 16,
+        in_chans: int = 3,
+        embed_dim: int = 768,
+        norm_layer: Optional[Callable] = None,
+        flatten: bool = True,
+        output_fmt: Optional[str] = None,
+        bias: bool = True,
+        strict_img_size: bool = True,
+        dynamic_img_pad: bool = False,
     ):
         super().__init__()
         self.patch_size = to_2tuple(patch_size)
         if img_size is not None:
             self.img_size = to_2tuple(img_size)
-            self.grid_size = tuple([s // p for s, p in zip(self.img_size, self.patch_size)])
+            self.grid_size = tuple(
+                [s // p for s, p in zip(self.img_size, self.patch_size)]
+            )
             self.num_patches = self.grid_size[0] * self.grid_size[1]
         else:
             self.img_size = None
@@ -63,7 +66,9 @@ class PatchEmbed(nn.Module):
         self.strict_img_size = strict_img_size
         self.dynamic_img_pad = dynamic_img_pad
 
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
+        self.proj = nn.Conv2d(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias
+        )
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
 
     def feat_ratio(self, as_scalar=True) -> Union[Tuple[int, int], int]:
@@ -73,11 +78,13 @@ class PatchEmbed(nn.Module):
             return self.patch_size
 
     def dynamic_feat_size(self, img_size: Tuple[int, int]) -> Tuple[int, int]:
-        """ Get grid (feature) size for given image size taking account of dynamic padding.
+        """Get grid (feature) size for given image size taking account of dynamic padding.
         NOTE: must be torchscript compatible so using fixed tuple indexing
         """
         if self.dynamic_img_pad:
-            return math.ceil(img_size[0] / self.patch_size[0]), math.ceil(img_size[1] / self.patch_size[1])
+            return math.ceil(img_size[0] / self.patch_size[0]), math.ceil(
+                img_size[1] / self.patch_size[1]
+            )
         else:
             return img_size[0] // self.patch_size[0], img_size[1] // self.patch_size[1]
 
@@ -85,16 +92,22 @@ class PatchEmbed(nn.Module):
         B, C, H, W = x.shape
         if self.img_size is not None:
             if self.strict_img_size:
-                _assert(H == self.img_size[0], f"Input height ({H}) doesn't match model ({self.img_size[0]}).")
-                _assert(W == self.img_size[1], f"Input width ({W}) doesn't match model ({self.img_size[1]}).")
+                _assert(
+                    H == self.img_size[0],
+                    f"Input height ({H}) doesn't match model ({self.img_size[0]}).",
+                )
+                _assert(
+                    W == self.img_size[1],
+                    f"Input width ({W}) doesn't match model ({self.img_size[1]}).",
+                )
             elif not self.dynamic_img_pad:
                 _assert(
                     H % self.patch_size[0] == 0,
-                    f"Input height ({H}) should be divisible by patch size ({self.patch_size[0]})."
+                    f"Input height ({H}) should be divisible by patch size ({self.patch_size[0]}).",
                 )
                 _assert(
                     W % self.patch_size[1] == 0,
-                    f"Input width ({W}) should be divisible by patch size ({self.patch_size[1]})."
+                    f"Input width ({W}) should be divisible by patch size ({self.patch_size[1]}).",
                 )
         if self.dynamic_img_pad:
             pad_h = (self.patch_size[0] - H % self.patch_size[0]) % self.patch_size[0]
@@ -110,20 +123,20 @@ class PatchEmbed(nn.Module):
 
 
 class PatchEmbedWithSize(PatchEmbed):
-    """ 2D Image to Patch Embedding
-    """
+    """2D Image to Patch Embedding"""
+
     output_fmt: Format
 
     def __init__(
-            self,
-            img_size: Optional[int] = 224,
-            patch_size: int = 16,
-            in_chans: int = 3,
-            embed_dim: int = 768,
-            norm_layer: Optional[Callable] = None,
-            flatten: bool = True,
-            output_fmt: Optional[str] = None,
-            bias: bool = True,
+        self,
+        img_size: Optional[int] = 224,
+        patch_size: int = 16,
+        in_chans: int = 3,
+        embed_dim: int = 768,
+        norm_layer: Optional[Callable] = None,
+        flatten: bool = True,
+        output_fmt: Optional[str] = None,
+        bias: bool = True,
     ):
         super().__init__(
             img_size=img_size,
@@ -139,8 +152,14 @@ class PatchEmbedWithSize(PatchEmbed):
     def forward(self, x) -> Tuple[torch.Tensor, List[int]]:
         B, C, H, W = x.shape
         if self.img_size is not None:
-            _assert(H % self.patch_size[0] == 0, f"Input image height ({H}) must be divisible by patch size ({self.patch_size[0]}).")
-            _assert(W % self.patch_size[1] == 0, f"Input image width ({W}) must be divisible by patch size ({self.patch_size[1]}).")
+            _assert(
+                H % self.patch_size[0] == 0,
+                f"Input image height ({H}) must be divisible by patch size ({self.patch_size[0]}).",
+            )
+            _assert(
+                W % self.patch_size[1] == 0,
+                f"Input image width ({W}) must be divisible by patch size ({self.patch_size[1]}).",
+            )
 
         x = self.proj(x)
         feat_size = x.shape[-2:]
@@ -153,11 +172,11 @@ class PatchEmbedWithSize(PatchEmbed):
 
 
 def resample_patch_embed(
-        patch_embed,
-        new_size: List[int],
-        interpolation: str = 'bicubic',
-        antialias: bool = True,
-        verbose: bool = False,
+    patch_embed,
+    new_size: List[int],
+    interpolation: str = "bicubic",
+    antialias: bool = True,
+    verbose: bool = False,
 ):
     """Resample the weights of the patch embedding kernel to target resolution.
     We resample the patch embedding kernel by approximately inverting the effect
@@ -179,14 +198,18 @@ def resample_patch_embed(
         Resized patch embedding kernel.
     """
     import numpy as np
+
     try:
         import functorch
+
         vmap = functorch.vmap
     except ImportError:
-        if hasattr(torch, 'vmap'):
+        if hasattr(torch, "vmap"):
             vmap = torch.vmap
         else:
-            assert False, "functorch or a version of torch with vmap is required for FlexiViT resizing."
+            assert (
+                False
+            ), "functorch or a version of torch with vmap is required for FlexiViT resizing."
 
     assert len(patch_embed.shape) == 4, "Four dimensions expected"
     assert len(new_size) == 2, "New shape should only be hw"
@@ -195,24 +218,29 @@ def resample_patch_embed(
         return patch_embed
 
     if verbose:
-        _logger.info(f"Resize patch embedding {patch_embed.shape} to {new_size}, w/ {interpolation} interpolation.")
+        _logger.info(
+            f"Resize patch embedding {patch_embed.shape} to {new_size}, w/ {interpolation} interpolation."
+        )
 
     def resize(x_np, _new_size):
         x_tf = torch.Tensor(x_np)[None, None, ...]
         x_upsampled = F.interpolate(
-            x_tf, size=_new_size, mode=interpolation, antialias=antialias)[0, 0, ...].numpy()
+            x_tf, size=_new_size, mode=interpolation, antialias=antialias
+        )[0, 0, ...].numpy()
         return x_upsampled
 
     def get_resize_mat(_old_size, _new_size):
         mat = []
         for i in range(np.prod(_old_size)):
             basis_vec = np.zeros(_old_size)
-            basis_vec[np.unravel_index(i, _old_size)] = 1.
+            basis_vec[np.unravel_index(i, _old_size)] = 1.0
             mat.append(resize(basis_vec, _new_size).reshape(-1))
         return np.stack(mat).T
 
     resize_mat = get_resize_mat(old_size, new_size)
-    resize_mat_pinv = torch.tensor(np.linalg.pinv(resize_mat.T), device=patch_embed.device)
+    resize_mat_pinv = torch.tensor(
+        np.linalg.pinv(resize_mat.T), device=patch_embed.device
+    )
 
     def resample_kernel(kernel):
         resampled_kernel = resize_mat_pinv @ kernel.reshape(-1)

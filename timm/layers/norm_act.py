@@ -12,6 +12,7 @@ This allows swapping with alternative layers that are natively both norm + act s
 
 Hacked together by / Copyright 2022 Ross Wightman
 """
+
 from typing import Union, List, Optional, Any
 
 import torch
@@ -26,7 +27,7 @@ from .trace_utils import _assert
 
 def _create_act(act_layer, act_kwargs=None, inplace=False, apply_act=True):
     act_kwargs = act_kwargs or {}
-    act_kwargs.setdefault('inplace', inplace)
+    act_kwargs.setdefault("inplace", inplace)
     act = None
     if apply_act:
         act = create_act_layer(act_layer, **act_kwargs)
@@ -40,23 +41,24 @@ class BatchNormAct2d(nn.BatchNorm2d):
     compatible with weights trained with separate bn, act. This is why we inherit from BN
     instead of composing it as a .bn member.
     """
+
     def __init__(
-            self,
-            num_features,
-            eps=1e-5,
-            momentum=0.1,
-            affine=True,
-            track_running_stats=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
-            device=None,
-            dtype=None,
+        self,
+        num_features,
+        eps=1e-5,
+        momentum=0.1,
+        affine=True,
+        track_running_stats=True,
+        apply_act=True,
+        act_layer=nn.ReLU,
+        act_kwargs=None,
+        inplace=True,
+        drop_layer=None,
+        device=None,
+        dtype=None,
     ):
         try:
-            factory_kwargs = {'device': device, 'dtype': dtype}
+            factory_kwargs = {"device": device, "dtype": dtype}
             super(BatchNormAct2d, self).__init__(
                 num_features,
                 eps=eps,
@@ -75,11 +77,13 @@ class BatchNormAct2d(nn.BatchNorm2d):
                 track_running_stats=track_running_stats,
             )
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+        self.act = _create_act(
+            act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act
+        )
 
     def forward(self, x):
         # cut & paste of torch.nn.BatchNorm2d.forward impl to avoid issues with torchscript and tracing
-        _assert(x.ndim == 4, f'expected 4D input (got {x.ndim}D input)')
+        _assert(x.ndim == 4, f"expected 4D input (got {x.ndim}D input)")
 
         # exponential_average_factor is set to self.momentum
         # (when it is available) only so that it gets updated
@@ -115,7 +119,11 @@ class BatchNormAct2d(nn.BatchNorm2d):
         x = F.batch_norm(
             x,
             # If buffers are not to be tracked, ensure that they won't be updated
-            self.running_mean if not self.training or self.track_running_stats else None,
+            (
+                self.running_mean
+                if not self.training or self.track_running_stats
+                else None
+            ),
             self.running_var if not self.training or self.track_running_stats else None,
             self.weight,
             self.bias,
@@ -134,7 +142,9 @@ class SyncBatchNormAct(nn.SyncBatchNorm):
     # but ONLY when used in conjunction with the timm conversion function below.
     # Do not create this module directly or use the PyTorch conversion function.
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = super().forward(x)  # SyncBN doesn't work with torchscript anyways, so this is fine
+        x = super().forward(
+            x
+        )  # SyncBN doesn't work with torchscript anyways, so this is fine
         if hasattr(self, "drop"):
             x = self.drop(x)
         if hasattr(self, "act"):
@@ -211,7 +221,9 @@ class FrozenBatchNormAct2d(torch.nn.Module):
         self.register_buffer("running_var", torch.ones(num_features))
 
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+        self.act = _create_act(
+            act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act
+        )
 
     def _load_from_state_dict(
         self,
@@ -228,7 +240,13 @@ class FrozenBatchNormAct2d(torch.nn.Module):
             del state_dict[num_batches_tracked_key]
 
         super()._load_from_state_dict(
-            state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -274,7 +292,13 @@ def freeze_batch_norm_2d(module):
         res.eps = module.eps
         res.drop = module.drop
         res.act = module.act
-    elif isinstance(module, (torch.nn.modules.batchnorm.BatchNorm2d, torch.nn.modules.batchnorm.SyncBatchNorm)):
+    elif isinstance(
+        module,
+        (
+            torch.nn.modules.batchnorm.BatchNorm2d,
+            torch.nn.modules.batchnorm.SyncBatchNorm,
+        ),
+    ):
         res = FrozenBatchNorm2d(module.num_features)
         res.num_features = module.num_features
         res.affine = module.affine
@@ -343,17 +367,17 @@ def _num_groups(num_channels, num_groups, group_size):
 class GroupNormAct(nn.GroupNorm):
     # NOTE num_channel and num_groups order flipped for easier layer swaps / binding of fixed args
     def __init__(
-            self,
-            num_channels,
-            num_groups=32,
-            eps=1e-5,
-            affine=True,
-            group_size=None,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+        self,
+        num_channels,
+        num_groups=32,
+        eps=1e-5,
+        affine=True,
+        group_size=None,
+        apply_act=True,
+        act_layer=nn.ReLU,
+        act_kwargs=None,
+        inplace=True,
+        drop_layer=None,
     ):
         super(GroupNormAct, self).__init__(
             _num_groups(num_channels, num_groups, group_size),
@@ -362,7 +386,9 @@ class GroupNormAct(nn.GroupNorm):
             affine=affine,
         )
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+        self.act = _create_act(
+            act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act
+        )
 
         self._fast_norm = is_fast_norm()
 
@@ -378,19 +404,21 @@ class GroupNormAct(nn.GroupNorm):
 
 class GroupNorm1Act(nn.GroupNorm):
     def __init__(
-            self,
-            num_channels,
-            eps=1e-5,
-            affine=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+        self,
+        num_channels,
+        eps=1e-5,
+        affine=True,
+        apply_act=True,
+        act_layer=nn.ReLU,
+        act_kwargs=None,
+        inplace=True,
+        drop_layer=None,
     ):
         super(GroupNorm1Act, self).__init__(1, num_channels, eps=eps, affine=affine)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+        self.act = _create_act(
+            act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act
+        )
 
         self._fast_norm = is_fast_norm()
 
@@ -406,25 +434,31 @@ class GroupNorm1Act(nn.GroupNorm):
 
 class LayerNormAct(nn.LayerNorm):
     def __init__(
-            self,
-            normalization_shape: Union[int, List[int], torch.Size],
-            eps=1e-5,
-            affine=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+        self,
+        normalization_shape: Union[int, List[int], torch.Size],
+        eps=1e-5,
+        affine=True,
+        apply_act=True,
+        act_layer=nn.ReLU,
+        act_kwargs=None,
+        inplace=True,
+        drop_layer=None,
     ):
-        super(LayerNormAct, self).__init__(normalization_shape, eps=eps, elementwise_affine=affine)
+        super(LayerNormAct, self).__init__(
+            normalization_shape, eps=eps, elementwise_affine=affine
+        )
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+        self.act = _create_act(
+            act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act
+        )
 
         self._fast_norm = is_fast_norm()
 
     def forward(self, x):
         if self._fast_norm:
-            x = fast_layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+            x = fast_layer_norm(
+                x, self.normalized_shape, self.weight, self.bias, self.eps
+            )
         else:
             x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         x = self.drop(x)
@@ -434,25 +468,31 @@ class LayerNormAct(nn.LayerNorm):
 
 class LayerNormAct2d(nn.LayerNorm):
     def __init__(
-            self,
-            num_channels,
-            eps=1e-5,
-            affine=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+        self,
+        num_channels,
+        eps=1e-5,
+        affine=True,
+        apply_act=True,
+        act_layer=nn.ReLU,
+        act_kwargs=None,
+        inplace=True,
+        drop_layer=None,
     ):
-        super(LayerNormAct2d, self).__init__(num_channels, eps=eps, elementwise_affine=affine)
+        super(LayerNormAct2d, self).__init__(
+            num_channels, eps=eps, elementwise_affine=affine
+        )
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+        self.act = _create_act(
+            act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act
+        )
         self._fast_norm = is_fast_norm()
 
     def forward(self, x):
         x = x.permute(0, 2, 3, 1)
         if self._fast_norm:
-            x = fast_layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+            x = fast_layer_norm(
+                x, self.normalized_shape, self.weight, self.bias, self.eps
+            )
         else:
             x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         x = x.permute(0, 3, 1, 2)

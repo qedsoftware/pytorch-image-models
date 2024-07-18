@@ -2,6 +2,7 @@
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+
 from collections import OrderedDict
 from functools import partial
 from typing import Optional, Union, Callable
@@ -16,15 +17,17 @@ from .create_norm import get_norm_layer
 
 
 def _create_pool(
-        num_features: int,
-        num_classes: int,
-        pool_type: str = 'avg',
-        use_conv: bool = False,
-        input_fmt: Optional[str] = None,
+    num_features: int,
+    num_classes: int,
+    pool_type: str = "avg",
+    use_conv: bool = False,
+    input_fmt: Optional[str] = None,
 ):
     flatten_in_pool = not use_conv  # flatten when we use a Linear layer after pooling
     if not pool_type:
-        flatten_in_pool = False  # disable flattening if pooling is pass-through (no pooling)
+        flatten_in_pool = (
+            False  # disable flattening if pooling is pass-through (no pooling)
+        )
     global_pool = SelectAdaptivePool2d(
         pool_type=pool_type,
         flatten=flatten_in_pool,
@@ -45,12 +48,12 @@ def _create_fc(num_features, num_classes, use_conv=False):
 
 
 def create_classifier(
-        num_features: int,
-        num_classes: int,
-        pool_type: str = 'avg',
-        use_conv: bool = False,
-        input_fmt: str = 'NCHW',
-        drop_rate: Optional[float] = None,
+    num_features: int,
+    num_classes: int,
+    pool_type: str = "avg",
+    use_conv: bool = False,
+    input_fmt: str = "NCHW",
+    drop_rate: Optional[float] = None,
 ):
     global_pool, num_pooled_features = _create_pool(
         num_features,
@@ -74,13 +77,13 @@ class ClassifierHead(nn.Module):
     """Classifier head w/ configurable global pooling and dropout."""
 
     def __init__(
-            self,
-            in_features: int,
-            num_classes: int,
-            pool_type: str = 'avg',
-            drop_rate: float = 0.,
-            use_conv: bool = False,
-            input_fmt: str = 'NCHW',
+        self,
+        in_features: int,
+        num_classes: int,
+        pool_type: str = "avg",
+        drop_rate: float = 0.0,
+        use_conv: bool = False,
+        input_fmt: str = "NCHW",
     ):
         """
         Args:
@@ -115,7 +118,9 @@ class ClassifierHead(nn.Module):
                 use_conv=self.use_conv,
                 input_fmt=self.input_fmt,
             )
-            self.flatten = nn.Flatten(1) if self.use_conv and pool_type else nn.Identity()
+            self.flatten = (
+                nn.Flatten(1) if self.use_conv and pool_type else nn.Identity()
+            )
         else:
             num_pooled_features = self.in_features * self.global_pool.feat_mult()
             self.fc = _create_fc(
@@ -136,14 +141,14 @@ class ClassifierHead(nn.Module):
 class NormMlpClassifierHead(nn.Module):
 
     def __init__(
-            self,
-            in_features: int,
-            num_classes: int,
-            hidden_size: Optional[int] = None,
-            pool_type: str = 'avg',
-            drop_rate: float = 0.,
-            norm_layer: Union[str, Callable] = 'layernorm2d',
-            act_layer: Union[str, Callable] = 'tanh',
+        self,
+        in_features: int,
+        num_classes: int,
+        hidden_size: Optional[int] = None,
+        pool_type: str = "avg",
+        drop_rate: float = 0.0,
+        norm_layer: Union[str, Callable] = "layernorm2d",
+        act_layer: Union[str, Callable] = "tanh",
     ):
         """
         Args:
@@ -168,15 +173,23 @@ class NormMlpClassifierHead(nn.Module):
         self.norm = norm_layer(in_features)
         self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
         if hidden_size:
-            self.pre_logits = nn.Sequential(OrderedDict([
-                ('fc', linear_layer(in_features, hidden_size)),
-                ('act', act_layer()),
-            ]))
+            self.pre_logits = nn.Sequential(
+                OrderedDict(
+                    [
+                        ("fc", linear_layer(in_features, hidden_size)),
+                        ("act", act_layer()),
+                    ]
+                )
+            )
             self.num_features = hidden_size
         else:
             self.pre_logits = nn.Identity()
         self.drop = nn.Dropout(drop_rate)
-        self.fc = linear_layer(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.fc = (
+            linear_layer(self.num_features, num_classes)
+            if num_classes > 0
+            else nn.Identity()
+        )
 
     def reset(self, num_classes: int, pool_type: Optional[str] = None):
         if pool_type is not None:
@@ -185,14 +198,21 @@ class NormMlpClassifierHead(nn.Module):
         self.use_conv = self.global_pool.is_identity()
         linear_layer = partial(nn.Conv2d, kernel_size=1) if self.use_conv else nn.Linear
         if self.hidden_size:
-            if ((isinstance(self.pre_logits.fc, nn.Conv2d) and not self.use_conv) or
-                    (isinstance(self.pre_logits.fc, nn.Linear) and self.use_conv)):
+            if (isinstance(self.pre_logits.fc, nn.Conv2d) and not self.use_conv) or (
+                isinstance(self.pre_logits.fc, nn.Linear) and self.use_conv
+            ):
                 with torch.no_grad():
                     new_fc = linear_layer(self.in_features, self.hidden_size)
-                    new_fc.weight.copy_(self.pre_logits.fc.weight.reshape(new_fc.weight.shape))
+                    new_fc.weight.copy_(
+                        self.pre_logits.fc.weight.reshape(new_fc.weight.shape)
+                    )
                     new_fc.bias.copy_(self.pre_logits.fc.bias)
                     self.pre_logits.fc = new_fc
-        self.fc = linear_layer(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.fc = (
+            linear_layer(self.num_features, num_classes)
+            if num_classes > 0
+            else nn.Identity()
+        )
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)

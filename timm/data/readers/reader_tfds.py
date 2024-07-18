@@ -6,6 +6,7 @@ https://www.tensorflow.org/datasets/catalog/overview#image_classification
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+
 import math
 import os
 import sys
@@ -17,14 +18,22 @@ from PIL import Image
 
 try:
     import tensorflow as tf
-    tf.config.set_visible_devices([], 'GPU')  # Hands off my GPU! (or pip install tensorflow-cpu)
+
+    tf.config.set_visible_devices(
+        [], "GPU"
+    )  # Hands off my GPU! (or pip install tensorflow-cpu)
     import tensorflow_datasets as tfds
+
     try:
-        tfds.even_splits('', 1, drop_remainder=False)  # non-buggy even_splits has drop_remainder arg
+        tfds.even_splits(
+            "", 1, drop_remainder=False
+        )  # non-buggy even_splits has drop_remainder arg
         has_buggy_even_splits = False
     except TypeError:
-        print("Warning: This version of tfds doesn't have the latest even_splits impl. "
-              "Please update or use tfds-nightly for better fine-grained split behaviour.")
+        print(
+            "Warning: This version of tfds doesn't have the latest even_splits impl. "
+            "Please update or use tfds-nightly for better fine-grained split behaviour."
+        )
         has_buggy_even_splits = True
     # NOTE uncomment below if having file limit issues on dataset build (or alter your OS defaults)
     # import resource
@@ -32,7 +41,9 @@ try:
     # resource.setrlimit(resource.RLIMIT_NOFILE, (high, high))
 except ImportError as e:
     print(e)
-    print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
+    print(
+        "Please install tensorflow_datasets package `pip install tensorflow-datasets`."
+    )
     raise e
 
 from .class_map import load_class_map
@@ -40,13 +51,19 @@ from .reader import Reader
 from .shared_count import SharedCount
 
 
-MAX_TP_SIZE = int(os.environ.get('TFDS_TP_SIZE', 8))  # maximum TF threadpool size, for jpeg decodes and queuing activities
-SHUFFLE_SIZE = int(os.environ.get('TFDS_SHUFFLE_SIZE', 8192))  # samples to shuffle in DS queue
-PREFETCH_SIZE = int(os.environ.get('TFDS_PREFETCH_SIZE', 2048))  # samples to prefetch
+MAX_TP_SIZE = int(
+    os.environ.get("TFDS_TP_SIZE", 8)
+)  # maximum TF threadpool size, for jpeg decodes and queuing activities
+SHUFFLE_SIZE = int(
+    os.environ.get("TFDS_SHUFFLE_SIZE", 8192)
+)  # samples to shuffle in DS queue
+PREFETCH_SIZE = int(os.environ.get("TFDS_PREFETCH_SIZE", 2048))  # samples to prefetch
 
 
 @tfds.decode.make_decoder()
-def decode_example(serialized_image, feature, dct_method='INTEGER_ACCURATE', channels=3):
+def decode_example(
+    serialized_image, feature, dct_method="INTEGER_ACCURATE", channels=3
+):
     return tf.image.decode_jpeg(
         serialized_image,
         channels=channels,
@@ -60,15 +77,15 @@ def even_split_indices(split, n, num_samples):
 
 
 def get_class_labels(info):
-    if 'label' not in info.features:
+    if "label" not in info.features:
         return {}
-    class_label = info.features['label']
+    class_label = info.features["label"]
     class_to_idx = {n: class_label.str2int(n) for n in class_label.names}
     return class_to_idx
 
 
 class ReaderTfds(Reader):
-    """ Wrap Tensorflow Datasets for use in PyTorch
+    """Wrap Tensorflow Datasets for use in PyTorch
 
     There several things to be aware of:
       * To prevent excessive samples being dropped per epoch w/ distributed training or multiplicity of
@@ -92,25 +109,25 @@ class ReaderTfds(Reader):
     """
 
     def __init__(
-            self,
-            name,
-            root=None,
-            split='train',
-            class_map=None,
-            is_training=False,
-            batch_size=1,
-            download=False,
-            repeats=0,
-            seed=42,
-            input_key='image',
-            input_img_mode='RGB',
-            target_key='label',
-            target_img_mode='',
-            prefetch_size=None,
-            shuffle_size=None,
-            max_threadpool_size=None
+        self,
+        name,
+        root=None,
+        split="train",
+        class_map=None,
+        is_training=False,
+        batch_size=1,
+        download=False,
+        repeats=0,
+        seed=42,
+        input_key="image",
+        input_img_mode="RGB",
+        target_key="label",
+        target_img_mode="",
+        prefetch_size=None,
+        shuffle_size=None,
+        max_threadpool_size=None,
     ):
-        """ Tensorflow-datasets Wrapper
+        """Tensorflow-datasets Wrapper
 
         Args:
             root: root data dir (ie your TFDS_DATA_DIR. not dataset specific sub-dir)
@@ -135,7 +152,9 @@ class ReaderTfds(Reader):
         self.is_training = is_training
         self.batch_size = batch_size
         self.repeats = repeats
-        self.common_seed = seed  # a seed that's fixed across all worker / distributed instances
+        self.common_seed = (
+            seed  # a seed that's fixed across all worker / distributed instances
+        )
 
         # performance settings
         self.prefetch_size = prefetch_size or PREFETCH_SIZE
@@ -156,7 +175,11 @@ class ReaderTfds(Reader):
             self.class_to_idx = load_class_map(class_map)
             self.remap_class = True
         else:
-            self.class_to_idx = get_class_labels(self.builder.info) if self.target_key == 'label' else {}
+            self.class_to_idx = (
+                get_class_labels(self.builder.info)
+                if self.target_key == "label"
+                else {}
+            )
         self.split_info = self.builder.info.splits[split]
         self.num_samples = self.split_info.num_examples
 
@@ -172,7 +195,9 @@ class ReaderTfds(Reader):
         self.num_workers = 1
         self.worker_info = None
         self.worker_seed = 0  # seed unique to each work instance
-        self.subsplit = None  # set when data is distributed across workers using sub-splits
+        self.subsplit = (
+            None  # set when data is distributed across workers using sub-splits
+        )
         self.ds = None  # initialized lazily on each dataloader worker process
         self.init_count = 0  # number of ds TF data pipeline initializations
         self.epoch_count = SharedCount()
@@ -184,8 +209,8 @@ class ReaderTfds(Reader):
         self.epoch_count.value = count
 
     def set_loader_cfg(
-            self,
-            num_workers: Optional[int] = None,
+        self,
+        num_workers: Optional[int] = None,
     ):
         if self.ds is not None:
             return
@@ -194,7 +219,7 @@ class ReaderTfds(Reader):
             self.global_num_workers = self.dist_num_replicas * self.num_workers
 
     def _lazy_init(self):
-        """ Lazily initialize the dataset.
+        """Lazily initialize the dataset.
 
         This is necessary to init the Tensorflow dataset pipeline in the (dataloader) process that
         will be using the dataset instance. The __init__ method is called on the main process,
@@ -227,14 +252,18 @@ class ReaderTfds(Reader):
             for validation where we can't drop samples and need to avoid minimize uneven splits to avoid padding.
             """
             should_subsplit = self.global_num_workers > 1 and (
-                    self.split_info.num_shards < self.global_num_workers or not self.is_training)
+                self.split_info.num_shards < self.global_num_workers
+                or not self.is_training
+            )
             if should_subsplit:
                 # split the dataset w/o using sharding for more even samples / worker, can result in less optimal
                 # read patterns for distributed training (overlap across shards) so better to use InputContext there
                 if has_buggy_even_splits:
                     # my even_split workaround doesn't work on subsplits, upgrade tfds!
                     if not isinstance(self.split_info, tfds.core.splits.SubSplitInfo):
-                        subsplits = even_split_indices(self.split, self.global_num_workers, self.num_samples)
+                        subsplits = even_split_indices(
+                            self.split, self.global_num_workers, self.num_samples
+                        )
                         self.subsplit = subsplits[global_worker_id]
                 else:
                     subsplits = tfds.even_splits(self.split, self.global_num_workers)
@@ -246,7 +275,7 @@ class ReaderTfds(Reader):
             input_context = tf.distribute.InputContext(
                 num_input_pipelines=self.global_num_workers,
                 input_pipeline_id=global_worker_id,
-                num_replicas_in_sync=self.dist_num_replicas  # FIXME does this arg have any impact?
+                num_replicas_in_sync=self.dist_num_replicas,  # FIXME does this arg have any impact?
             )
         read_config = tfds.ReadConfig(
             shuffle_seed=self.common_seed + self.epoch_count.value,
@@ -256,13 +285,19 @@ class ReaderTfds(Reader):
         ds = self.builder.as_dataset(
             split=self.subsplit or self.split,
             shuffle_files=self.is_training,
-            decoders=dict(image=decode_example(channels=1 if self.input_img_mode == 'L' else 3)),
+            decoders=dict(
+                image=decode_example(channels=1 if self.input_img_mode == "L" else 3)
+            ),
             read_config=read_config,
         )
         # avoid overloading threading w/ combo of TF ds threads + PyTorch workers
         options = tf.data.Options()
-        thread_member = 'threading' if hasattr(options, 'threading') else 'experimental_threading'
-        getattr(options, thread_member).private_threadpool_size = max(1, self.max_threadpool_size // self.num_workers)
+        thread_member = (
+            "threading" if hasattr(options, "threading") else "experimental_threading"
+        )
+        getattr(options, thread_member).private_threadpool_size = max(
+            1, self.max_threadpool_size // self.num_workers
+        )
         getattr(options, thread_member).max_intra_op_parallelism = 1
         ds = ds.with_options(options)
         if self.is_training or self.repeats > 1:
@@ -270,18 +305,28 @@ class ReaderTfds(Reader):
             # see warnings at https://pytorch.org/docs/stable/data.html#multi-process-data-loading
             ds = ds.repeat()  # allow wrap around and break iteration manually
         if self.is_training:
-            ds = ds.shuffle(min(self.num_samples, self.shuffle_size) // self.global_num_workers, seed=self.worker_seed)
-        ds = ds.prefetch(min(self.num_samples // self.global_num_workers, self.prefetch_size))
+            ds = ds.shuffle(
+                min(self.num_samples, self.shuffle_size) // self.global_num_workers,
+                seed=self.worker_seed,
+            )
+        ds = ds.prefetch(
+            min(self.num_samples // self.global_num_workers, self.prefetch_size)
+        )
         self.ds = tfds.as_numpy(ds)
         self.init_count += 1
 
     def _num_samples_per_worker(self):
-        num_worker_samples = \
-            max(1, self.repeats) * self.num_samples / max(self.global_num_workers, self.dist_num_replicas)
+        num_worker_samples = (
+            max(1, self.repeats)
+            * self.num_samples
+            / max(self.global_num_workers, self.dist_num_replicas)
+        )
         if self.is_training or self.dist_num_replicas > 1:
             num_worker_samples = math.ceil(num_worker_samples)
         if self.is_training:
-            num_worker_samples = math.ceil(num_worker_samples / self.batch_size) * self.batch_size
+            num_worker_samples = (
+                math.ceil(num_worker_samples / self.batch_size) * self.batch_size
+            )
         return int(num_worker_samples)
 
     def __iter__(self):
@@ -300,7 +345,7 @@ class ReaderTfds(Reader):
         for sample in self.ds:
             input_data = sample[self.input_key]
             if self.input_img_mode:
-                if self.input_img_mode == 'L' and input_data.ndim == 3:
+                if self.input_img_mode == "L" and input_data.ndim == 3:
                     input_data = input_data[:, :, 0]
                 input_data = Image.fromarray(input_data, mode=self.input_img_mode)
             target_data = sample[self.target_key]
@@ -318,8 +363,12 @@ class ReaderTfds(Reader):
                 break
 
         # Pad across distributed nodes (make counts equal by adding samples)
-        if not self.is_training and self.dist_num_replicas > 1 and self.subsplit is not None and \
-                0 < sample_count < target_sample_count:
+        if (
+            not self.is_training
+            and self.dist_num_replicas > 1
+            and self.subsplit is not None
+            and 0 < sample_count < target_sample_count
+        ):
             # Validation batch padding only done for distributed training where results are reduced across nodes.
             # For single process case, it won't matter if workers return different batch sizes.
             # If using input_context or % based splits, sample count can vary significantly across workers and this
@@ -336,19 +385,19 @@ class ReaderTfds(Reader):
         assert False, "Not supported"  # no random access to samples
 
     def filenames(self, basename=False, absolute=False):
-        """ Return all filenames in dataset, overrides base"""
+        """Return all filenames in dataset, overrides base"""
         if self.ds is None:
             self._lazy_init()
         names = []
         for sample in self.ds:
             if len(names) > self.num_samples:
                 break  # safety for ds.repeat() case
-            if 'file_name' in sample:
-                name = sample['file_name']
-            elif 'filename' in sample:
-                name = sample['filename']
-            elif 'id' in sample:
-                name = sample['id']
+            if "file_name" in sample:
+                name = sample["file_name"]
+            elif "filename" in sample:
+                name = sample["filename"]
+            elif "id" in sample:
+                name = sample["id"]
             else:
                 assert False, "No supported name field present"
             names.append(name)

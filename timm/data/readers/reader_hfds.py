@@ -2,6 +2,7 @@
 
 Hacked together by / Copyright 2022 Ross Wightman
 """
+
 import io
 import math
 from typing import Optional
@@ -19,8 +20,8 @@ from .class_map import load_class_map
 from .reader import Reader
 
 
-def get_class_labels(info, label_key='label'):
-    if 'label' not in info.features:
+def get_class_labels(info, label_key="label"):
+    if "label" not in info.features:
         return {}
     class_label = info.features[label_key]
     class_to_idx = {n: class_label.str2int(n) for n in class_label.names}
@@ -30,17 +31,16 @@ def get_class_labels(info, label_key='label'):
 class ReaderHfds(Reader):
 
     def __init__(
-            self,
-            name: str,
-            root: Optional[str] = None,
-            split: str = 'train',
-            class_map: dict = None,
-            input_key: str = 'image',
-            target_key: str = 'label',
-            download: bool = False,
+        self,
+        name: str,
+        root: Optional[str] = None,
+        split: str = "train",
+        class_map: dict = None,
+        input_key: str = "image",
+        target_key: str = "label",
+        download: bool = False,
     ):
-        """
-        """
+        """ """
         super().__init__()
         self.root = root
         self.split = split
@@ -66,11 +66,11 @@ class ReaderHfds(Reader):
     def __getitem__(self, index):
         item = self.dataset[index]
         image = item[self.image_key]
-        if 'bytes' in image and image['bytes']:
-            image = io.BytesIO(image['bytes'])
+        if "bytes" in image and image["bytes"]:
+            image = io.BytesIO(image["bytes"])
         else:
-            assert 'path' in image and image['path']
-            image = open(image['path'], 'rb')
+            assert "path" in image and image["path"]
+            image = open(image["path"], "rb")
         label = item[self.label_key]
         if self.remap_class:
             label = self.class_to_idx[label]
@@ -81,4 +81,4 @@ class ReaderHfds(Reader):
 
     def _filename(self, index, basename=False, absolute=False):
         item = self.dataset[index]
-        return item[self.image_key]['path']
+        return item[self.image_key]["path"]

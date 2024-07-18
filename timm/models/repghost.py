@@ -4,6 +4,7 @@ RepGhost: A Hardware-Efficient Ghost Module via Re-parameterization. https://arx
 
 Original implementation: https://github.com/ChengpengChen/RepGhost
 """
+
 import copy
 from functools import partial
 from typing import Optional
@@ -19,22 +20,26 @@ from ._efficientnet_blocks import SqueezeExcite, ConvBnAct
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
-__all__ = ['RepGhostNet']
+__all__ = ["RepGhostNet"]
 
 
-_SE_LAYER = partial(SqueezeExcite, gate_layer='hard_sigmoid', rd_round_fn=partial(make_divisible, divisor=4))
+_SE_LAYER = partial(
+    SqueezeExcite,
+    gate_layer="hard_sigmoid",
+    rd_round_fn=partial(make_divisible, divisor=4),
+)
 
 
 class RepGhostModule(nn.Module):
     def __init__(
-            self,
-            in_chs,
-            out_chs,
-            kernel_size=1,
-            dw_size=3,
-            stride=1,
-            relu=True,
-            reparam=True,
+        self,
+        in_chs,
+        out_chs,
+        kernel_size=1,
+        dw_size=3,
+        stride=1,
+        relu=True,
+        reparam=True,
     ):
         super(RepGhostModule, self).__init__()
         self.out_chs = out_chs
@@ -42,7 +47,9 @@ class RepGhostModule(nn.Module):
         new_chs = out_chs
 
         self.primary_conv = nn.Sequential(
-            nn.Conv2d(in_chs, init_chs, kernel_size, stride, kernel_size // 2, bias=False),
+            nn.Conv2d(
+                in_chs, init_chs, kernel_size, stride, kernel_size // 2, bias=False
+            ),
             nn.BatchNorm2d(init_chs),
             nn.ReLU(inplace=True) if relu else nn.Identity(),
         )
@@ -57,7 +64,9 @@ class RepGhostModule(nn.Module):
         self.fusion_bn = nn.Sequential(*fusion_bn)
 
         self.cheap_operation = nn.Sequential(
-            nn.Conv2d(init_chs, new_chs, dw_size, 1, dw_size//2, groups=init_chs, bias=False),
+            nn.Conv2d(
+                init_chs, new_chs, dw_size, 1, dw_size // 2, groups=init_chs, bias=False
+            ),
             nn.BatchNorm2d(new_chs),
             # nn.ReLU(inplace=True) if relu else nn.Identity(),
         )
@@ -71,9 +80,13 @@ class RepGhostModule(nn.Module):
         return self.relu(x2)
 
     def get_equivalent_kernel_bias(self):
-        kernel3x3, bias3x3 = self._fuse_bn_tensor(self.cheap_operation[0], self.cheap_operation[1])
+        kernel3x3, bias3x3 = self._fuse_bn_tensor(
+            self.cheap_operation[0], self.cheap_operation[1]
+        )
         for conv, bn in zip(self.fusion_conv, self.fusion_bn):
-            kernel, bias = self._fuse_bn_tensor(conv, bn, kernel3x3.shape[0], kernel3x3.device)
+            kernel, bias = self._fuse_bn_tensor(
+                conv, bn, kernel3x3.shape[0], kernel3x3.device
+            )
             kernel3x3 += self._pad_1x1_to_3x3_tensor(kernel)
             bias3x3 += bias
         return kernel3x3, bias3x3
@@ -119,11 +132,12 @@ class RepGhostModule(nn.Module):
             padding=self.cheap_operation[0].padding,
             dilation=self.cheap_operation[0].dilation,
             groups=self.cheap_operation[0].groups,
-            bias=True)
+            bias=True,
+        )
         self.cheap_operation.weight.data = kernel
         self.cheap_operation.bias.data = bias
-        self.__delattr__('fusion_conv')
-        self.__delattr__('fusion_bn')
+        self.__delattr__("fusion_conv")
+        self.__delattr__("fusion_bn")
         self.fusion_conv = []
         self.fusion_bn = []
 
@@ -132,21 +146,21 @@ class RepGhostModule(nn.Module):
 
 
 class RepGhostBottleneck(nn.Module):
-    """ RepGhost bottleneck w/ optional SE"""
+    """RepGhost bottleneck w/ optional SE"""
 
     def __init__(
-            self,
-            in_chs,
-            mid_chs,
-            out_chs,
-            dw_kernel_size=3,
-            stride=1,
-            act_layer=nn.ReLU,
-            se_ratio=0.,
-            reparam=True,
+        self,
+        in_chs,
+        mid_chs,
+        out_chs,
+        dw_kernel_size=3,
+        stride=1,
+        act_layer=nn.ReLU,
+        se_ratio=0.0,
+        reparam=True,
     ):
         super(RepGhostBottleneck, self).__init__()
-        has_se = se_ratio is not None and se_ratio > 0.
+        has_se = se_ratio is not None and se_ratio > 0.0
         self.stride = stride
 
         # Point-wise expansion
@@ -155,8 +169,14 @@ class RepGhostBottleneck(nn.Module):
         # Depth-wise convolution
         if self.stride > 1:
             self.conv_dw = nn.Conv2d(
-                mid_chs, mid_chs, dw_kernel_size, stride=stride,
-                padding=(dw_kernel_size-1)//2, groups=mid_chs, bias=False)
+                mid_chs,
+                mid_chs,
+                dw_kernel_size,
+                stride=stride,
+                padding=(dw_kernel_size - 1) // 2,
+                groups=mid_chs,
+                bias=False,
+            )
             self.bn_dw = nn.BatchNorm2d(mid_chs)
         else:
             self.conv_dw = None
@@ -167,15 +187,21 @@ class RepGhostBottleneck(nn.Module):
 
         # Point-wise linear projection
         self.ghost2 = RepGhostModule(mid_chs, out_chs, relu=False, reparam=reparam)
-        
+
         # shortcut
         if in_chs == out_chs and self.stride == 1:
             self.shortcut = nn.Sequential()
         else:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(
-                    in_chs, in_chs, dw_kernel_size, stride=stride,
-                    padding=(dw_kernel_size-1)//2, groups=in_chs, bias=False),
+                    in_chs,
+                    in_chs,
+                    dw_kernel_size,
+                    stride=stride,
+                    padding=(dw_kernel_size - 1) // 2,
+                    groups=in_chs,
+                    bias=False,
+                ),
                 nn.BatchNorm2d(in_chs),
                 nn.Conv2d(in_chs, out_chs, 1, stride=1, padding=0, bias=False),
                 nn.BatchNorm2d(out_chs),
@@ -198,26 +224,28 @@ class RepGhostBottleneck(nn.Module):
 
         # 2nd ghost bottleneck
         x = self.ghost2(x)
-        
+
         x += self.shortcut(shortcut)
         return x
 
 
 class RepGhostNet(nn.Module):
     def __init__(
-            self,
-            cfgs,
-            num_classes=1000,
-            width=1.0,
-            in_chans=3,
-            output_stride=32,
-            global_pool='avg',
-            drop_rate=0.2,
-            reparam=True,
+        self,
+        cfgs,
+        num_classes=1000,
+        width=1.0,
+        in_chans=3,
+        output_stride=32,
+        global_pool="avg",
+        drop_rate=0.2,
+        reparam=True,
     ):
         super(RepGhostNet, self).__init__()
         # setting of inverted residual blocks
-        assert output_stride == 32, 'only output_stride==32 is valid, dilation not supported'
+        assert (
+            output_stride == 32
+        ), "only output_stride==32 is valid, dilation not supported"
         self.cfgs = cfgs
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -227,7 +255,9 @@ class RepGhostNet(nn.Module):
         # building first layer
         stem_chs = make_divisible(16 * width, 4)
         self.conv_stem = nn.Conv2d(in_chans, stem_chs, 3, 2, 1, bias=False)
-        self.feature_info.append(dict(num_chs=stem_chs, reduction=2, module=f'conv_stem'))
+        self.feature_info.append(
+            dict(num_chs=stem_chs, reduction=2, module=f"conv_stem")
+        )
         self.bn1 = nn.BatchNorm2d(stem_chs)
         self.act1 = nn.ReLU(inplace=True)
         prev_chs = stem_chs
@@ -243,20 +273,35 @@ class RepGhostNet(nn.Module):
             for k, exp_size, c, se_ratio, s in cfg:
                 out_chs = make_divisible(c * width, 4)
                 mid_chs = make_divisible(exp_size * width, 4)
-                layers.append(block(prev_chs, mid_chs, out_chs, k, s, se_ratio=se_ratio, reparam=reparam))
+                layers.append(
+                    block(
+                        prev_chs,
+                        mid_chs,
+                        out_chs,
+                        k,
+                        s,
+                        se_ratio=se_ratio,
+                        reparam=reparam,
+                    )
+                )
                 prev_chs = out_chs
             if s > 1:
                 net_stride *= 2
-                self.feature_info.append(dict(
-                    num_chs=prev_chs, reduction=net_stride, module=f'blocks.{stage_idx}'))
+                self.feature_info.append(
+                    dict(
+                        num_chs=prev_chs,
+                        reduction=net_stride,
+                        module=f"blocks.{stage_idx}",
+                    )
+                )
             stages.append(nn.Sequential(*layers))
             stage_idx += 1
 
         out_chs = make_divisible(exp_size * width * 2, 4)
         stages.append(nn.Sequential(ConvBnAct(prev_chs, out_chs, 1)))
         self.pool_dim = prev_chs = out_chs
-        
-        self.blocks = nn.Sequential(*stages)        
+
+        self.blocks = nn.Sequential(*stages)
 
         # building last several layers
         self.num_features = prev_chs
@@ -264,17 +309,21 @@ class RepGhostNet(nn.Module):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=True)
         self.act2 = nn.ReLU(inplace=True)
-        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(out_chs, num_classes) if num_classes > 0 else nn.Identity()
+        self.flatten = (
+            nn.Flatten(1) if global_pool else nn.Identity()
+        )  # don't flatten if pooling disabled
+        self.classifier = (
+            Linear(out_chs, num_classes) if num_classes > 0 else nn.Identity()
+        )
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^conv_stem|bn1',
+            stem=r"^conv_stem|bn1",
             blocks=[
-                (r'^blocks\.(\d+)' if coarse else r'^blocks\.(\d+)\.(\d+)', None),
-                (r'conv_head', (99999,))
-            ]
+                (r"^blocks\.(\d+)" if coarse else r"^blocks\.(\d+)\.(\d+)", None),
+                (r"conv_head", (99999,)),
+            ],
         )
         return matcher
 
@@ -291,8 +340,14 @@ class RepGhostNet(nn.Module):
         if global_pool is not None:
             # NOTE: cannot meaningfully change pooling of efficient head after creation
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-            self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+            self.flatten = (
+                nn.Flatten(1) if global_pool else nn.Identity()
+            )  # don't flatten if pooling disabled
+        self.classifier = (
+            Linear(self.head_hidden_size, num_classes)
+            if num_classes > 0
+            else nn.Identity()
+        )
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -309,7 +364,7 @@ class RepGhostNet(nn.Module):
         x = self.conv_head(x)
         x = self.act2(x)
         x = self.flatten(x)
-        if self.drop_rate > 0.:
+        if self.drop_rate > 0.0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         return x if pre_logits else self.classifier(x)
 
@@ -329,7 +384,7 @@ def repghost_model_convert(model: torch.nn.Module, save_path=None, do_copy=True)
     if do_copy:
         model = copy.deepcopy(model)
     for module in model.modules():
-        if hasattr(module, 'switch_to_deploy'):
+        if hasattr(module, "switch_to_deploy"):
             module.switch_to_deploy()
     if save_path is not None:
         torch.save(model.state_dict(), save_path)
@@ -341,30 +396,32 @@ def _create_repghostnet(variant, width=1.0, pretrained=False, **kwargs):
     Constructs a RepGhostNet model
     """
     cfgs = [
-        # k, t, c, SE, s 
+        # k, t, c, SE, s
         # stage1
-        [[3,  8,  16, 0, 1]],
+        [[3, 8, 16, 0, 1]],
         # stage2
-        [[3,  24,  24, 0, 2]],
-        [[3,  36,  24, 0, 1]],
+        [[3, 24, 24, 0, 2]],
+        [[3, 36, 24, 0, 1]],
         # stage3
-        [[5,  36,  40, 0.25, 2]],
-        [[5, 60,  40, 0.25, 1]],
+        [[5, 36, 40, 0.25, 2]],
+        [[5, 60, 40, 0.25, 1]],
         # stage4
-        [[3, 120,  80, 0, 2]],
-        [[3, 100,  80, 0, 1],
-         [3, 120,  80, 0, 1],
-         [3, 120,  80, 0, 1],
-         [3, 240, 112, 0.25, 1],
-         [3, 336, 112, 0.25, 1]
+        [[3, 120, 80, 0, 2]],
+        [
+            [3, 100, 80, 0, 1],
+            [3, 120, 80, 0, 1],
+            [3, 120, 80, 0, 1],
+            [3, 240, 112, 0.25, 1],
+            [3, 336, 112, 0.25, 1],
         ],
         # stage5
         [[5, 336, 160, 0.25, 2]],
-        [[5, 480, 160, 0, 1],
-         [5, 480, 160, 0.25, 1],
-         [5, 480, 160, 0, 1],
-         [5, 480, 160, 0.25, 1]
-        ]
+        [
+            [5, 480, 160, 0, 1],
+            [5, 480, 160, 0.25, 1],
+            [5, 480, 160, 0, 1],
+            [5, 480, 160, 0.25, 1],
+        ],
     ]
     model_kwargs = dict(
         cfgs=cfgs,
@@ -380,102 +437,127 @@ def _create_repghostnet(variant, width=1.0, pretrained=False, **kwargs):
     )
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url="", **kwargs):
     return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'conv_stem', 'classifier': 'classifier',
-        **kwargs
+        "url": url,
+        "num_classes": 1000,
+        "input_size": (3, 224, 224),
+        "pool_size": (7, 7),
+        "crop_pct": 0.875,
+        "interpolation": "bicubic",
+        "mean": IMAGENET_DEFAULT_MEAN,
+        "std": IMAGENET_DEFAULT_STD,
+        "first_conv": "conv_stem",
+        "classifier": "classifier",
+        **kwargs,
     }
 
 
-default_cfgs = generate_default_cfgs({
-    'repghostnet_050.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_0_5x_43M_66.95.pth.tar'
-    ),
-    'repghostnet_058.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_0_58x_60M_68.94.pth.tar'
-    ),
-    'repghostnet_080.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_0_8x_96M_72.24.pth.tar'
-    ),
-    'repghostnet_100.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_1_0x_142M_74.22.pth.tar'
-    ),
-    'repghostnet_111.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_1_11x_170M_75.07.pth.tar'
-    ),
-    'repghostnet_130.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_1_3x_231M_76.37.pth.tar'
-    ),
-    'repghostnet_150.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_1_5x_301M_77.45.pth.tar'
-    ),
-    'repghostnet_200.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_2_0x_516M_78.81.pth.tar'
-    ),
-})
+default_cfgs = generate_default_cfgs(
+    {
+        "repghostnet_050.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_0_5x_43M_66.95.pth.tar'
+        ),
+        "repghostnet_058.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_0_58x_60M_68.94.pth.tar'
+        ),
+        "repghostnet_080.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_0_8x_96M_72.24.pth.tar'
+        ),
+        "repghostnet_100.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_1_0x_142M_74.22.pth.tar'
+        ),
+        "repghostnet_111.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_1_11x_170M_75.07.pth.tar'
+        ),
+        "repghostnet_130.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_1_3x_231M_76.37.pth.tar'
+        ),
+        "repghostnet_150.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_1_5x_301M_77.45.pth.tar'
+        ),
+        "repghostnet_200.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/ChengpengChen/RepGhost/releases/download/RepGhost/repghostnet_2_0x_516M_78.81.pth.tar'
+        ),
+    }
+)
 
 
 @register_model
 def repghostnet_050(pretrained=False, **kwargs) -> RepGhostNet:
-    """ RepGhostNet-0.5x """
-    model = _create_repghostnet('repghostnet_050', width=0.5, pretrained=pretrained, **kwargs)
+    """RepGhostNet-0.5x"""
+    model = _create_repghostnet(
+        "repghostnet_050", width=0.5, pretrained=pretrained, **kwargs
+    )
     return model
 
 
 @register_model
 def repghostnet_058(pretrained=False, **kwargs) -> RepGhostNet:
-    """ RepGhostNet-0.58x """
-    model = _create_repghostnet('repghostnet_058', width=0.58, pretrained=pretrained, **kwargs)
+    """RepGhostNet-0.58x"""
+    model = _create_repghostnet(
+        "repghostnet_058", width=0.58, pretrained=pretrained, **kwargs
+    )
     return model
 
 
 @register_model
 def repghostnet_080(pretrained=False, **kwargs) -> RepGhostNet:
-    """ RepGhostNet-0.8x """
-    model = _create_repghostnet('repghostnet_080', width=0.8, pretrained=pretrained, **kwargs)
+    """RepGhostNet-0.8x"""
+    model = _create_repghostnet(
+        "repghostnet_080", width=0.8, pretrained=pretrained, **kwargs
+    )
     return model
 
 
 @register_model
 def repghostnet_100(pretrained=False, **kwargs) -> RepGhostNet:
-    """ RepGhostNet-1.0x """
-    model = _create_repghostnet('repghostnet_100', width=1.0, pretrained=pretrained, **kwargs)
+    """RepGhostNet-1.0x"""
+    model = _create_repghostnet(
+        "repghostnet_100", width=1.0, pretrained=pretrained, **kwargs
+    )
     return model
 
 
 @register_model
 def repghostnet_111(pretrained=False, **kwargs) -> RepGhostNet:
-    """ RepGhostNet-1.11x """
-    model = _create_repghostnet('repghostnet_111', width=1.11, pretrained=pretrained, **kwargs)
+    """RepGhostNet-1.11x"""
+    model = _create_repghostnet(
+        "repghostnet_111", width=1.11, pretrained=pretrained, **kwargs
+    )
     return model
+
 
 @register_model
 def repghostnet_130(pretrained=False, **kwargs) -> RepGhostNet:
-    """ RepGhostNet-1.3x """
-    model = _create_repghostnet('repghostnet_130', width=1.3, pretrained=pretrained, **kwargs)
+    """RepGhostNet-1.3x"""
+    model = _create_repghostnet(
+        "repghostnet_130", width=1.3, pretrained=pretrained, **kwargs
+    )
     return model
 
 
 @register_model
 def repghostnet_150(pretrained=False, **kwargs) -> RepGhostNet:
-    """ RepGhostNet-1.5x """
-    model = _create_repghostnet('repghostnet_150', width=1.5, pretrained=pretrained, **kwargs)
+    """RepGhostNet-1.5x"""
+    model = _create_repghostnet(
+        "repghostnet_150", width=1.5, pretrained=pretrained, **kwargs
+    )
     return model
 
 
 @register_model
 def repghostnet_200(pretrained=False, **kwargs) -> RepGhostNet:
-    """ RepGhostNet-2.0x """
-    model = _create_repghostnet('repghostnet_200', width=2.0, pretrained=pretrained, **kwargs)
+    """RepGhostNet-2.0x"""
+    model = _create_repghostnet(
+        "repghostnet_200", width=2.0, pretrained=pretrained, **kwargs
+    )
     return model

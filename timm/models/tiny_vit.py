@@ -6,7 +6,7 @@ Paper: `TinyViT: Fast Pretraining Distillation for Small Vision Transformers`
 Adapted from official impl at https://github.com/microsoft/Cream/tree/main/TinyViT
 """
 
-__all__ = ['TinyVit']
+__all__ = ["TinyVit"]
 
 import itertools
 from functools import partial
@@ -17,8 +17,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import LayerNorm2d, NormMlpClassifierHead, DropPath,\
-    trunc_normal_, resize_rel_pos_bias_table_levit, use_fused_attn
+from timm.layers import (
+    LayerNorm2d,
+    NormMlpClassifierHead,
+    DropPath,
+    trunc_normal_,
+    resize_rel_pos_bias_table_levit,
+    use_fused_attn,
+)
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._manipulate import checkpoint_seq
@@ -26,9 +32,21 @@ from ._registry import register_model, generate_default_cfgs
 
 
 class ConvNorm(torch.nn.Sequential):
-    def __init__(self, in_chs, out_chs, ks=1, stride=1, pad=0, dilation=1, groups=1, bn_weight_init=1):
+    def __init__(
+        self,
+        in_chs,
+        out_chs,
+        ks=1,
+        stride=1,
+        pad=0,
+        dilation=1,
+        groups=1,
+        bn_weight_init=1,
+    ):
         super().__init__()
-        self.conv = nn.Conv2d(in_chs, out_chs, ks, stride, pad, dilation, groups, bias=False)
+        self.conv = nn.Conv2d(
+            in_chs, out_chs, ks, stride, pad, dilation, groups, bias=False
+        )
         self.bn = nn.BatchNorm2d(out_chs)
         torch.nn.init.constant_(self.bn.weight, bn_weight_init)
         torch.nn.init.constant_(self.bn.bias, 0)
@@ -38,11 +56,16 @@ class ConvNorm(torch.nn.Sequential):
         c, bn = self.conv, self.bn
         w = bn.weight / (bn.running_var + bn.eps) ** 0.5
         w = c.weight * w[:, None, None, None]
-        b = bn.bias - bn.running_mean * bn.weight / \
-            (bn.running_var + bn.eps) ** 0.5
+        b = bn.bias - bn.running_mean * bn.weight / (bn.running_var + bn.eps) ** 0.5
         m = torch.nn.Conv2d(
-            w.size(1) * self.conv.groups, w.size(0), w.shape[2:],
-            stride=self.conv.stride, padding=self.conv.padding, dilation=self.conv.dilation, groups=self.conv.groups)
+            w.size(1) * self.conv.groups,
+            w.size(0),
+            w.shape[2:],
+            stride=self.conv.stride,
+            padding=self.conv.padding,
+            dilation=self.conv.dilation,
+            groups=self.conv.groups,
+        )
         m.weight.data.copy_(w)
         m.bias.data.copy_(b)
         return m
@@ -73,7 +96,7 @@ class MBConv(nn.Module):
         self.act2 = act_layer()
         self.conv3 = ConvNorm(mid_chs, out_chs, ks=1, bn_weight_init=0.0)
         self.act3 = act_layer()
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(self, x):
         shortcut = x
@@ -108,23 +131,28 @@ class PatchMerging(nn.Module):
 
 class ConvLayer(nn.Module):
     def __init__(
-            self,
-            dim,
-            depth,
-            act_layer,
-            drop_path=0.,
-            conv_expand_ratio=4.,
+        self,
+        dim,
+        depth,
+        act_layer,
+        drop_path=0.0,
+        conv_expand_ratio=4.0,
     ):
         super().__init__()
         self.dim = dim
         self.depth = depth
-        self.blocks = nn.Sequential(*[
-            MBConv(
-                dim, dim, conv_expand_ratio, act_layer,
-                drop_path[i] if isinstance(drop_path, list) else drop_path,
-            )
-            for i in range(depth)
-        ])
+        self.blocks = nn.Sequential(
+            *[
+                MBConv(
+                    dim,
+                    dim,
+                    conv_expand_ratio,
+                    act_layer,
+                    drop_path[i] if isinstance(drop_path, list) else drop_path,
+                )
+                for i in range(depth)
+            ]
+        )
 
     def forward(self, x):
         x = self.blocks(x)
@@ -133,13 +161,13 @@ class ConvLayer(nn.Module):
 
 class NormMlp(nn.Module):
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            norm_layer=nn.LayerNorm,
-            act_layer=nn.GELU,
-            drop=0.,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        norm_layer=nn.LayerNorm,
+        act_layer=nn.GELU,
+        drop=0.0,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -166,17 +194,17 @@ class Attention(torch.nn.Module):
     attention_bias_cache: Dict[str, torch.Tensor]
 
     def __init__(
-            self,
-            dim,
-            key_dim,
-            num_heads=8,
-            attn_ratio=4,
-            resolution=(14, 14),
+        self,
+        dim,
+        key_dim,
+        num_heads=8,
+        attn_ratio=4,
+        resolution=(14, 14),
     ):
         super().__init__()
         assert isinstance(resolution, tuple) and len(resolution) == 2
         self.num_heads = num_heads
-        self.scale = key_dim ** -0.5
+        self.scale = key_dim**-0.5
         self.key_dim = key_dim
         self.val_dim = int(attn_ratio * key_dim)
         self.out_dim = self.val_dim * num_heads
@@ -198,8 +226,12 @@ class Attention(torch.nn.Module):
                 if offset not in attention_offsets:
                     attention_offsets[offset] = len(attention_offsets)
                 idxs.append(attention_offsets[offset])
-        self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
-        self.register_buffer('attention_bias_idxs', torch.LongTensor(idxs).view(N, N), persistent=False)
+        self.attention_biases = torch.nn.Parameter(
+            torch.zeros(num_heads, len(attention_offsets))
+        )
+        self.register_buffer(
+            "attention_bias_idxs", torch.LongTensor(idxs).view(N, N), persistent=False
+        )
         self.attention_bias_cache = {}
 
     @torch.no_grad()
@@ -214,7 +246,9 @@ class Attention(torch.nn.Module):
         else:
             device_key = str(device)
             if device_key not in self.attention_bias_cache:
-                self.attention_bias_cache[device_key] = self.attention_biases[:, self.attention_bias_idxs]
+                self.attention_bias_cache[device_key] = self.attention_biases[
+                    :, self.attention_bias_idxs
+                ]
             return self.attention_bias_cache[device_key]
 
     def forward(self, x):
@@ -224,7 +258,9 @@ class Attention(torch.nn.Module):
         x = self.norm(x)
         qkv = self.qkv(x)
         # (B, N, num_heads, d)
-        q, k, v = qkv.view(B, N, self.num_heads, -1).split([self.key_dim, self.key_dim, self.val_dim], dim=3)
+        q, k, v = qkv.view(B, N, self.num_heads, -1).split(
+            [self.key_dim, self.key_dim, self.val_dim], dim=3
+        )
         # (B, num_heads, N, d)
         q = q.permute(0, 2, 1, 3)
         k = k.permute(0, 2, 1, 3)
@@ -244,7 +280,7 @@ class Attention(torch.nn.Module):
 
 
 class TinyVitBlock(nn.Module):
-    """ TinyViT Block.
+    """TinyViT Block.
 
     Args:
         dim (int): Number of input channels.
@@ -259,30 +295,31 @@ class TinyVitBlock(nn.Module):
     """
 
     def __init__(
-            self,
-            dim,
-            num_heads,
-            window_size=7,
-            mlp_ratio=4.,
-            drop=0.,
-            drop_path=0.,
-            local_conv_size=3,
-            act_layer=nn.GELU
+        self,
+        dim,
+        num_heads,
+        window_size=7,
+        mlp_ratio=4.0,
+        drop=0.0,
+        drop_path=0.0,
+        local_conv_size=3,
+        act_layer=nn.GELU,
     ):
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
-        assert window_size > 0, 'window_size must be greater than 0'
+        assert window_size > 0, "window_size must be greater than 0"
         self.window_size = window_size
         self.mlp_ratio = mlp_ratio
 
-        assert dim % num_heads == 0, 'dim must be divisible by num_heads'
+        assert dim % num_heads == 0, "dim must be divisible by num_heads"
         head_dim = dim // num_heads
 
         window_resolution = (window_size, window_size)
-        self.attn = Attention(dim, head_dim, num_heads, attn_ratio=1, resolution=window_resolution)
-        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
+        self.attn = Attention(
+            dim, head_dim, num_heads, attn_ratio=1, resolution=window_resolution
+        )
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
         self.mlp = NormMlp(
             in_features=dim,
@@ -290,10 +327,12 @@ class TinyVitBlock(nn.Module):
             act_layer=act_layer,
             drop=drop,
         )
-        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
         pad = local_conv_size // 2
-        self.local_conv = ConvNorm(dim, dim, ks=local_conv_size, stride=1, pad=pad, groups=dim)
+        self.local_conv = ConvNorm(
+            dim, dim, ks=local_conv_size, stride=1, pad=pad, groups=dim
+        )
 
     def forward(self, x):
         B, H, W, C = x.shape
@@ -315,14 +354,20 @@ class TinyVitBlock(nn.Module):
             pH, pW = H + pad_b, W + pad_r
             nH = pH // self.window_size
             nW = pW // self.window_size
-            x = x.view(B, nH, self.window_size, nW, self.window_size, C).transpose(2, 3).reshape(
-                B * nH * nW, self.window_size * self.window_size, C
+            x = (
+                x.view(B, nH, self.window_size, nW, self.window_size, C)
+                .transpose(2, 3)
+                .reshape(B * nH * nW, self.window_size * self.window_size, C)
             )
 
             x = self.attn(x)
 
             # window reverse
-            x = x.view(B, nH, nW, self.window_size, self.window_size, C).transpose(2, 3).reshape(B, pH, pW, C)
+            x = (
+                x.view(B, nH, nW, self.window_size, self.window_size, C)
+                .transpose(2, 3)
+                .reshape(B, pH, pW, C)
+            )
 
             if padding:
                 x = x[:, :H, :W].contiguous()
@@ -336,15 +381,17 @@ class TinyVitBlock(nn.Module):
         return x.view(B, H, W, C)
 
     def extra_repr(self) -> str:
-        return f"dim={self.dim}, num_heads={self.num_heads}, " \
-               f"window_size={self.window_size}, mlp_ratio={self.mlp_ratio}"
+        return (
+            f"dim={self.dim}, num_heads={self.num_heads}, "
+            f"window_size={self.window_size}, mlp_ratio={self.mlp_ratio}"
+        )
 
 
 register_notrace_module(TinyVitBlock)
 
 
 class TinyVitStage(nn.Module):
-    """ A basic TinyViT layer for one stage.
+    """A basic TinyViT layer for one stage.
 
     Args:
         dim (int): Number of input channels.
@@ -361,23 +408,23 @@ class TinyVitStage(nn.Module):
     """
 
     def __init__(
-            self,
-            dim,
-            out_dim,
-            depth,
-            num_heads,
-            window_size,
-            mlp_ratio=4.,
-            drop=0.,
-            drop_path=0.,
-            downsample=None,
-            local_conv_size=3,
-            act_layer=nn.GELU,
+        self,
+        dim,
+        out_dim,
+        depth,
+        num_heads,
+        window_size,
+        mlp_ratio=4.0,
+        drop=0.0,
+        drop_path=0.0,
+        downsample=None,
+        local_conv_size=3,
+        act_layer=nn.GELU,
     ):
 
         super().__init__()
         self.depth = depth
-        self.out_dim =  out_dim
+        self.out_dim = out_dim
 
         # patch merging layer
         if downsample is not None:
@@ -391,18 +438,23 @@ class TinyVitStage(nn.Module):
             assert dim == out_dim
 
         # build blocks
-        self.blocks = nn.Sequential(*[
-            TinyVitBlock(
-                dim=out_dim,
-                num_heads=num_heads,
-                window_size=window_size,
-                mlp_ratio=mlp_ratio,
-                drop=drop,
-                drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                local_conv_size=local_conv_size,
-                act_layer=act_layer,
-            )
-            for i in range(depth)])
+        self.blocks = nn.Sequential(
+            *[
+                TinyVitBlock(
+                    dim=out_dim,
+                    num_heads=num_heads,
+                    window_size=window_size,
+                    mlp_ratio=mlp_ratio,
+                    drop=drop,
+                    drop_path=(
+                        drop_path[i] if isinstance(drop_path, list) else drop_path
+                    ),
+                    local_conv_size=local_conv_size,
+                    act_layer=act_layer,
+                )
+                for i in range(depth)
+            ]
+        )
 
     def forward(self, x):
         x = self.downsample(x)
@@ -417,21 +469,21 @@ class TinyVitStage(nn.Module):
 
 class TinyVit(nn.Module):
     def __init__(
-            self,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            embed_dims=(96, 192, 384, 768),
-            depths=(2, 2, 6, 2),
-            num_heads=(3, 6, 12, 24),
-            window_sizes=(7, 7, 14, 7),
-            mlp_ratio=4.,
-            drop_rate=0.,
-            drop_path_rate=0.1,
-            use_checkpoint=False,
-            mbconv_expand_ratio=4.0,
-            local_conv_size=3,
-            act_layer=nn.GELU,
+        self,
+        in_chans=3,
+        num_classes=1000,
+        global_pool="avg",
+        embed_dims=(96, 192, 384, 768),
+        depths=(2, 2, 6, 2),
+        num_heads=(3, 6, 12, 24),
+        window_sizes=(7, 7, 14, 7),
+        mlp_ratio=4.0,
+        drop_rate=0.0,
+        drop_path_rate=0.1,
+        use_checkpoint=False,
+        mbconv_expand_ratio=4.0,
+        local_conv_size=3,
+        act_layer=nn.GELU,
     ):
         super().__init__()
 
@@ -461,12 +513,14 @@ class TinyVit(nn.Module):
                     dim=prev_dim,
                     depth=depths[stage_idx],
                     act_layer=act_layer,
-                    drop_path=dpr[:depths[stage_idx]],
+                    drop_path=dpr[: depths[stage_idx]],
                     conv_expand_ratio=mbconv_expand_ratio,
                 )
             else:
                 out_dim = embed_dims[stage_idx]
-                drop_path_rate = dpr[sum(depths[:stage_idx]):sum(depths[:stage_idx + 1])]
+                drop_path_rate = dpr[
+                    sum(depths[:stage_idx]) : sum(depths[: stage_idx + 1])
+                ]
                 stage = TinyVitStage(
                     dim=embed_dims[stage_idx - 1],
                     out_dim=out_dim,
@@ -483,7 +537,9 @@ class TinyVit(nn.Module):
                 prev_dim = out_dim
                 stride *= 2
             self.stages.append(stage)
-            self.feature_info += [dict(num_chs=prev_dim, reduction=stride, module=f'stages.{stage_idx}')]
+            self.feature_info += [
+                dict(num_chs=prev_dim, reduction=stride, module=f"stages.{stage_idx}")
+            ]
 
         # Classifier head
         self.num_features = self.head_hidden_size = embed_dims[-1]
@@ -501,26 +557,30 @@ class TinyVit(nn.Module):
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
+            trunc_normal_(m.weight, std=0.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
     @torch.jit.ignore
     def no_weight_decay_keywords(self):
-        return {'attention_biases'}
+        return {"attention_biases"}
 
     @torch.jit.ignore
     def no_weight_decay(self):
-        return {x for x in self.state_dict().keys() if 'attention_biases' in x}
+        return {x for x in self.state_dict().keys() if "attention_biases" in x}
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^patch_embed',
-            blocks=r'^stages\.(\d+)' if coarse else [
-                (r'^stages\.(\d+).downsample', (0,)),
-                (r'^stages\.(\d+)\.\w+\.(\d+)', None),
-            ]
+            stem=r"^patch_embed",
+            blocks=(
+                r"^stages\.(\d+)"
+                if coarse
+                else [
+                    (r"^stages\.(\d+).downsample", (0,)),
+                    (r"^stages\.(\d+)\.\w+\.(\d+)", None),
+                ]
+            ),
         )
         return matcher
 
@@ -555,97 +615,104 @@ class TinyVit(nn.Module):
 
 
 def checkpoint_filter_fn(state_dict, model):
-    if 'model' in state_dict.keys():
-        state_dict = state_dict['model']
+    if "model" in state_dict.keys():
+        state_dict = state_dict["model"]
     target_sd = model.state_dict()
     out_dict = {}
     for k, v in state_dict.items():
-        if k.endswith('attention_bias_idxs'):
+        if k.endswith("attention_bias_idxs"):
             continue
-        if 'attention_biases' in k:
+        if "attention_biases" in k:
             # TODO: whether move this func into model for dynamic input resolution? (high risk)
             v = resize_rel_pos_bias_table_levit(v.T, target_sd[k].shape[::-1]).T
         out_dict[k] = v
     return out_dict
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url="", **kwargs):
     return {
-        'url': url,
-        'num_classes': 1000,
-        'mean': IMAGENET_DEFAULT_MEAN,
-        'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.conv1.conv',
-        'classifier': 'head.fc',
-        'pool_size': (7, 7),
-        'input_size': (3, 224, 224),
-        'crop_pct': 0.95,
+        "url": url,
+        "num_classes": 1000,
+        "mean": IMAGENET_DEFAULT_MEAN,
+        "std": IMAGENET_DEFAULT_STD,
+        "first_conv": "patch_embed.conv1.conv",
+        "classifier": "head.fc",
+        "pool_size": (7, 7),
+        "input_size": (3, 224, 224),
+        "crop_pct": 0.95,
         **kwargs,
     }
 
 
-default_cfgs = generate_default_cfgs({
-    'tiny_vit_5m_224.dist_in22k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_5m_22k_distill.pth',
-        num_classes=21841
-    ),
-    'tiny_vit_5m_224.dist_in22k_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_5m_22kto1k_distill.pth'
-    ),
-    'tiny_vit_5m_224.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_5m_1k.pth'
-    ),
-    'tiny_vit_11m_224.dist_in22k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_11m_22k_distill.pth',
-        num_classes=21841
-    ),
-    'tiny_vit_11m_224.dist_in22k_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_11m_22kto1k_distill.pth'
-    ),
-    'tiny_vit_11m_224.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_11m_1k.pth'
-    ),
-    'tiny_vit_21m_224.dist_in22k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22k_distill.pth',
-        num_classes=21841
-    ),
-    'tiny_vit_21m_224.dist_in22k_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_distill.pth'
-    ),
-    'tiny_vit_21m_224.in1k': _cfg(
-        hf_hub_id='timm/',
-        #url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_1k.pth'
-    ),
-    'tiny_vit_21m_384.dist_in22k_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_384_distill.pth',
-        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
-    ),
-    'tiny_vit_21m_512.dist_in22k_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_512_distill.pth',
-        input_size=(3, 512, 512), pool_size=(16, 16), crop_pct=1.0, crop_mode='squash',
-    ),
-})
+default_cfgs = generate_default_cfgs(
+    {
+        "tiny_vit_5m_224.dist_in22k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_5m_22k_distill.pth',
+            num_classes=21841,
+        ),
+        "tiny_vit_5m_224.dist_in22k_ft_in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_5m_22kto1k_distill.pth'
+        ),
+        "tiny_vit_5m_224.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_5m_1k.pth'
+        ),
+        "tiny_vit_11m_224.dist_in22k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_11m_22k_distill.pth',
+            num_classes=21841,
+        ),
+        "tiny_vit_11m_224.dist_in22k_ft_in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_11m_22kto1k_distill.pth'
+        ),
+        "tiny_vit_11m_224.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_11m_1k.pth'
+        ),
+        "tiny_vit_21m_224.dist_in22k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22k_distill.pth',
+            num_classes=21841,
+        ),
+        "tiny_vit_21m_224.dist_in22k_ft_in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_distill.pth'
+        ),
+        "tiny_vit_21m_224.in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_1k.pth'
+        ),
+        "tiny_vit_21m_384.dist_in22k_ft_in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_384_distill.pth',
+            input_size=(3, 384, 384),
+            pool_size=(12, 12),
+            crop_pct=1.0,
+        ),
+        "tiny_vit_21m_512.dist_in22k_ft_in1k": _cfg(
+            hf_hub_id="timm/",
+            # url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_512_distill.pth',
+            input_size=(3, 512, 512),
+            pool_size=(16, 16),
+            crop_pct=1.0,
+            crop_mode="squash",
+        ),
+    }
+)
 
 
 def _create_tiny_vit(variant, pretrained=False, **kwargs):
-    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3))
+    out_indices = kwargs.pop("out_indices", (0, 1, 2, 3))
     model = build_model_with_cfg(
         TinyVit,
         variant,
         pretrained,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         pretrained_filter_fn=checkpoint_filter_fn,
-        **kwargs
+        **kwargs,
     )
     return model
 
@@ -660,7 +727,7 @@ def tiny_vit_5m_224(pretrained=False, **kwargs):
         drop_path_rate=0.0,
     )
     model_kwargs.update(kwargs)
-    return _create_tiny_vit('tiny_vit_5m_224', pretrained, **model_kwargs)
+    return _create_tiny_vit("tiny_vit_5m_224", pretrained, **model_kwargs)
 
 
 @register_model
@@ -673,7 +740,7 @@ def tiny_vit_11m_224(pretrained=False, **kwargs):
         drop_path_rate=0.1,
     )
     model_kwargs.update(kwargs)
-    return _create_tiny_vit('tiny_vit_11m_224', pretrained, **model_kwargs)
+    return _create_tiny_vit("tiny_vit_11m_224", pretrained, **model_kwargs)
 
 
 @register_model
@@ -686,7 +753,7 @@ def tiny_vit_21m_224(pretrained=False, **kwargs):
         drop_path_rate=0.2,
     )
     model_kwargs.update(kwargs)
-    return _create_tiny_vit('tiny_vit_21m_224', pretrained, **model_kwargs)
+    return _create_tiny_vit("tiny_vit_21m_224", pretrained, **model_kwargs)
 
 
 @register_model
@@ -699,7 +766,7 @@ def tiny_vit_21m_384(pretrained=False, **kwargs):
         drop_path_rate=0.1,
     )
     model_kwargs.update(kwargs)
-    return _create_tiny_vit('tiny_vit_21m_384', pretrained, **model_kwargs)
+    return _create_tiny_vit("tiny_vit_21m_384", pretrained, **model_kwargs)
 
 
 @register_model
@@ -712,4 +779,4 @@ def tiny_vit_21m_512(pretrained=False, **kwargs):
         drop_path_rate=0.1,
     )
     model_kwargs.update(kwargs)
-    return _create_tiny_vit('tiny_vit_21m_512', pretrained, **model_kwargs)
+    return _create_tiny_vit("tiny_vit_21m_512", pretrained, **model_kwargs)

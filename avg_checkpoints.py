@@ -17,8 +17,10 @@ import os
 import glob
 import hashlib
 from timm.models import load_state_dict
+
 try:
     import safetensors.torch
+
     _has_safetensors = True
 except ImportError:
     _has_safetensors = False
@@ -26,35 +28,62 @@ except ImportError:
 DEFAULT_OUTPUT = "./averaged.pth"
 DEFAULT_SAFE_OUTPUT = "./averaged.safetensors"
 
-parser = argparse.ArgumentParser(description='PyTorch Checkpoint Averager')
-parser.add_argument('--input', default='', type=str, metavar='PATH',
-                    help='path to base input folder containing checkpoints')
-parser.add_argument('--filter', default='*.pth.tar', type=str, metavar='WILDCARD',
-                    help='checkpoint filter (path wildcard)')
-parser.add_argument('--output', default=DEFAULT_OUTPUT, type=str, metavar='PATH',
-                    help=f'Output filename. Defaults to {DEFAULT_SAFE_OUTPUT} when passing --safetensors.')
-parser.add_argument('--no-use-ema', dest='no_use_ema', action='store_true',
-                    help='Force not using ema version of weights (if present)')
-parser.add_argument('--no-sort', dest='no_sort', action='store_true',
-                    help='Do not sort and select by checkpoint metric, also makes "n" argument irrelevant')
-parser.add_argument('-n', type=int, default=10, metavar='N',
-                    help='Number of checkpoints to average')
-parser.add_argument('--safetensors', action='store_true',
-                    help='Save weights using safetensors instead of the default torch way (pickle).')
+parser = argparse.ArgumentParser(description="PyTorch Checkpoint Averager")
+parser.add_argument(
+    "--input",
+    default="",
+    type=str,
+    metavar="PATH",
+    help="path to base input folder containing checkpoints",
+)
+parser.add_argument(
+    "--filter",
+    default="*.pth.tar",
+    type=str,
+    metavar="WILDCARD",
+    help="checkpoint filter (path wildcard)",
+)
+parser.add_argument(
+    "--output",
+    default=DEFAULT_OUTPUT,
+    type=str,
+    metavar="PATH",
+    help=f"Output filename. Defaults to {DEFAULT_SAFE_OUTPUT} when passing --safetensors.",
+)
+parser.add_argument(
+    "--no-use-ema",
+    dest="no_use_ema",
+    action="store_true",
+    help="Force not using ema version of weights (if present)",
+)
+parser.add_argument(
+    "--no-sort",
+    dest="no_sort",
+    action="store_true",
+    help='Do not sort and select by checkpoint metric, also makes "n" argument irrelevant',
+)
+parser.add_argument(
+    "-n", type=int, default=10, metavar="N", help="Number of checkpoints to average"
+)
+parser.add_argument(
+    "--safetensors",
+    action="store_true",
+    help="Save weights using safetensors instead of the default torch way (pickle).",
+)
 
 
 def checkpoint_metric(checkpoint_path):
     if not checkpoint_path or not os.path.isfile(checkpoint_path):
         return {}
     print("=> Extracting metric from checkpoint '{}'".format(checkpoint_path))
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
     metric = None
-    if 'metric' in checkpoint:
-        metric = checkpoint['metric']
-    elif 'metrics' in checkpoint and 'metric_name' in checkpoint:
-        metrics = checkpoint['metrics']
+    if "metric" in checkpoint:
+        metric = checkpoint["metric"]
+    elif "metrics" in checkpoint and "metric_name" in checkpoint:
+        metrics = checkpoint["metrics"]
         print(metrics)
-        metric = metrics[checkpoint['metric_name']]
+        metric = metrics[checkpoint["metric_name"]]
     return metric
 
 
@@ -71,7 +100,7 @@ def main():
 
     output, output_ext = os.path.splitext(args.output)
     if not output_ext:
-        output_ext = ('.safetensors' if args.safetensors else '.pth')
+        output_ext = ".safetensors" if args.safetensors else ".pth"
     output = output + output_ext
 
     if args.safetensors and not output_ext == ".safetensors":
@@ -97,7 +126,7 @@ def main():
             if metric is not None:
                 checkpoint_metrics.append((metric, c))
         checkpoint_metrics = list(sorted(checkpoint_metrics))
-        checkpoint_metrics = checkpoint_metrics[-args.n:]
+        checkpoint_metrics = checkpoint_metrics[-args.n :]
         if checkpoint_metrics:
             print("Selected checkpoints:")
             [print(m, c) for m, c in checkpoint_metrics]
@@ -109,7 +138,7 @@ def main():
             [print(c) for c in checkpoints]
 
     if not avg_checkpoints:
-        print('Error: No checkpoints found to average.')
+        print("Error: No checkpoints found to average.")
         exit(1)
 
     avg_state_dict = {}
@@ -143,10 +172,10 @@ def main():
     else:
         torch.save(final_state_dict, output)
 
-    with open(output, 'rb') as f:
+    with open(output, "rb") as f:
         sha_hash = hashlib.sha256(f.read()).hexdigest()
     print(f"=> Saved state_dict to '{output}, SHA256: {sha_hash}'")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

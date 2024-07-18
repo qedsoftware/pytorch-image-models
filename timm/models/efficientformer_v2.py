@@ -14,6 +14,7 @@ Original code licensed Apache 2.0, Copyright (c) 2022 Snap Inc.
 
 Modifications and timm support by / Copyright 2023, Ross Wightman
 """
+
 import math
 from functools import partial
 from typing import Dict, Optional
@@ -22,7 +23,13 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import create_conv2d, create_norm_layer, get_act_layer, get_norm_layer, ConvNormAct
+from timm.layers import (
+    create_conv2d,
+    create_norm_layer,
+    get_act_layer,
+    get_norm_layer,
+    ConvNormAct,
+)
 from timm.layers import DropPath, trunc_normal_, to_2tuple, to_ntuple, ndgrid
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
@@ -30,40 +37,45 @@ from ._registry import generate_default_cfgs, register_model
 
 
 EfficientFormer_width = {
-    'L': (40, 80, 192, 384),  # 26m 83.3% 6attn
-    'S2': (32, 64, 144, 288),  # 12m 81.6% 4attn dp0.02
-    'S1': (32, 48, 120, 224),  # 6.1m 79.0
-    'S0': (32, 48, 96, 176),  # 75.0 75.7
+    "L": (40, 80, 192, 384),  # 26m 83.3% 6attn
+    "S2": (32, 64, 144, 288),  # 12m 81.6% 4attn dp0.02
+    "S1": (32, 48, 120, 224),  # 6.1m 79.0
+    "S0": (32, 48, 96, 176),  # 75.0 75.7
 }
 
 EfficientFormer_depth = {
-    'L': (5, 5, 15, 10),  # 26m 83.3%
-    'S2': (4, 4, 12, 8),  # 12m
-    'S1': (3, 3, 9, 6),  # 79.0
-    'S0': (2, 2, 6, 4),  # 75.7
+    "L": (5, 5, 15, 10),  # 26m 83.3%
+    "S2": (4, 4, 12, 8),  # 12m
+    "S1": (3, 3, 9, 6),  # 79.0
+    "S0": (2, 2, 6, 4),  # 75.7
 }
 
 EfficientFormer_expansion_ratios = {
-    'L': (4, 4, (4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4), (4, 4, 4, 3, 3, 3, 3, 4, 4, 4)),
-    'S2': (4, 4, (4, 4, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4), (4, 4, 3, 3, 3, 3, 4, 4)),
-    'S1': (4, 4, (4, 4, 3, 3, 3, 3, 4, 4, 4), (4, 4, 3, 3, 4, 4)),
-    'S0': (4, 4, (4, 3, 3, 3, 4, 4), (4, 3, 3, 4)),
+    "L": (
+        4,
+        4,
+        (4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4),
+        (4, 4, 4, 3, 3, 3, 3, 4, 4, 4),
+    ),
+    "S2": (4, 4, (4, 4, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4), (4, 4, 3, 3, 3, 3, 4, 4)),
+    "S1": (4, 4, (4, 4, 3, 3, 3, 3, 4, 4, 4), (4, 4, 3, 3, 4, 4)),
+    "S0": (4, 4, (4, 3, 3, 3, 4, 4), (4, 3, 3, 4)),
 }
 
 
 class ConvNorm(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel_size=1,
-            stride=1,
-            padding='',
-            dilation=1,
-            groups=1,
-            bias=True,
-            norm_layer='batchnorm2d',
-            norm_kwargs=None,
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=1,
+        stride=1,
+        padding="",
+        dilation=1,
+        groups=1,
+        bias=True,
+        norm_layer="batchnorm2d",
+        norm_kwargs=None,
     ):
         norm_kwargs = norm_kwargs or {}
         super(ConvNorm, self).__init__()
@@ -89,25 +101,27 @@ class Attention2d(torch.nn.Module):
     attention_bias_cache: Dict[str, torch.Tensor]
 
     def __init__(
-            self,
-            dim=384,
-            key_dim=32,
-            num_heads=8,
-            attn_ratio=4,
-            resolution=7,
-            act_layer=nn.GELU,
-            stride=None,
+        self,
+        dim=384,
+        key_dim=32,
+        num_heads=8,
+        attn_ratio=4,
+        resolution=7,
+        act_layer=nn.GELU,
+        stride=None,
     ):
         super().__init__()
         self.num_heads = num_heads
-        self.scale = key_dim ** -0.5
+        self.scale = key_dim**-0.5
         self.key_dim = key_dim
 
         resolution = to_2tuple(resolution)
         if stride is not None:
             resolution = tuple([math.ceil(r / stride) for r in resolution])
-            self.stride_conv = ConvNorm(dim, dim, kernel_size=3, stride=stride, groups=dim)
-            self.upsample = nn.Upsample(scale_factor=stride, mode='bilinear')
+            self.stride_conv = ConvNorm(
+                dim, dim, kernel_size=3, stride=stride, groups=dim
+            )
+            self.upsample = nn.Upsample(scale_factor=stride, mode="bilinear")
         else:
             self.stride_conv = None
             self.upsample = None
@@ -129,12 +143,18 @@ class Attention2d(torch.nn.Module):
         self.act = act_layer()
         self.proj = ConvNorm(self.dh, dim, 1)
 
-        pos = torch.stack(ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
+        pos = torch.stack(
+            ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))
+        ).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * self.resolution[1]) + rel_pos[1]
         self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, self.N))
-        self.register_buffer('attention_bias_idxs', torch.LongTensor(rel_pos), persistent=False)
-        self.attention_bias_cache = {}  # per-device attention_biases cache (data-parallel compat)
+        self.register_buffer(
+            "attention_bias_idxs", torch.LongTensor(rel_pos), persistent=False
+        )
+        self.attention_bias_cache = (
+            {}
+        )  # per-device attention_biases cache (data-parallel compat)
 
     @torch.no_grad()
     def train(self, mode=True):
@@ -148,7 +168,9 @@ class Attention2d(torch.nn.Module):
         else:
             device_key = str(device)
             if device_key not in self.attention_bias_cache:
-                self.attention_bias_cache[device_key] = self.attention_biases[:, self.attention_bias_idxs]
+                self.attention_bias_cache[device_key] = self.attention_biases[
+                    :, self.attention_bias_idxs
+                ]
             return self.attention_bias_cache[device_key]
 
     def forward(self, x):
@@ -182,7 +204,9 @@ class LocalGlobalQuery(torch.nn.Module):
     def __init__(self, in_dim, out_dim):
         super().__init__()
         self.pool = nn.AvgPool2d(1, 2, 0)
-        self.local = nn.Conv2d(in_dim, in_dim, kernel_size=3, stride=2, padding=1, groups=in_dim)
+        self.local = nn.Conv2d(
+            in_dim, in_dim, kernel_size=3, stride=2, padding=1, groups=in_dim
+        )
         self.proj = ConvNorm(in_dim, out_dim, 1)
 
     def forward(self, x):
@@ -197,19 +221,19 @@ class Attention2dDownsample(torch.nn.Module):
     attention_bias_cache: Dict[str, torch.Tensor]
 
     def __init__(
-            self,
-            dim=384,
-            key_dim=16,
-            num_heads=8,
-            attn_ratio=4,
-            resolution=7,
-            out_dim=None,
-            act_layer=nn.GELU,
+        self,
+        dim=384,
+        key_dim=16,
+        num_heads=8,
+        attn_ratio=4,
+        resolution=7,
+        out_dim=None,
+        act_layer=nn.GELU,
     ):
         super().__init__()
 
         self.num_heads = num_heads
-        self.scale = key_dim ** -0.5
+        self.scale = key_dim**-0.5
         self.key_dim = key_dim
         self.resolution = to_2tuple(resolution)
         self.resolution2 = tuple([math.ceil(r / 2) for r in self.resolution])
@@ -225,21 +249,29 @@ class Attention2dDownsample(torch.nn.Module):
         self.q = LocalGlobalQuery(dim, kh)
         self.k = ConvNorm(dim, kh, 1)
         self.v = ConvNorm(dim, self.dh, 1)
-        self.v_local = ConvNorm(self.dh, self.dh, kernel_size=3, stride=2, groups=self.dh)
+        self.v_local = ConvNorm(
+            self.dh, self.dh, kernel_size=3, stride=2, groups=self.dh
+        )
 
         self.act = act_layer()
         self.proj = ConvNorm(self.dh, self.out_dim, 1)
 
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, self.N))
-        k_pos = torch.stack(ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
-        q_pos = torch.stack(ndgrid(
-            torch.arange(0, self.resolution[0], step=2),
-            torch.arange(0, self.resolution[1], step=2)
-        )).flatten(1)
+        k_pos = torch.stack(
+            ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))
+        ).flatten(1)
+        q_pos = torch.stack(
+            ndgrid(
+                torch.arange(0, self.resolution[0], step=2),
+                torch.arange(0, self.resolution[1], step=2),
+            )
+        ).flatten(1)
         rel_pos = (q_pos[..., :, None] - k_pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * self.resolution[1]) + rel_pos[1]
-        self.register_buffer('attention_bias_idxs', rel_pos, persistent=False)
-        self.attention_bias_cache = {}  # per-device attention_biases cache (data-parallel compat)
+        self.register_buffer("attention_bias_idxs", rel_pos, persistent=False)
+        self.attention_bias_cache = (
+            {}
+        )  # per-device attention_biases cache (data-parallel compat)
 
     @torch.no_grad()
     def train(self, mode=True):
@@ -253,7 +285,9 @@ class Attention2dDownsample(torch.nn.Module):
         else:
             device_key = str(device)
             if device_key not in self.attention_bias_cache:
-                self.attention_bias_cache[device_key] = self.attention_biases[:, self.attention_bias_idxs]
+                self.attention_bias_cache[device_key] = self.attention_biases[
+                    :, self.attention_bias_idxs
+                ]
             return self.attention_bias_cache[device_key]
 
     def forward(self, x):
@@ -278,16 +312,16 @@ class Attention2dDownsample(torch.nn.Module):
 
 class Downsample(nn.Module):
     def __init__(
-            self,
-            in_chs,
-            out_chs,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            resolution=7,
-            use_attn=False,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
+        self,
+        in_chs,
+        out_chs,
+        kernel_size=3,
+        stride=2,
+        padding=1,
+        resolution=7,
+        use_attn=False,
+        act_layer=nn.GELU,
+        norm_layer=nn.BatchNorm2d,
     ):
         super().__init__()
 
@@ -328,25 +362,36 @@ class ConvMlpWithNorm(nn.Module):
     """
 
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-            drop=0.,
-            mid_conv=False,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        norm_layer=nn.BatchNorm2d,
+        drop=0.0,
+        mid_conv=False,
     ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         self.fc1 = ConvNormAct(
-            in_features, hidden_features, 1,
-            bias=True, norm_layer=norm_layer, act_layer=act_layer)
+            in_features,
+            hidden_features,
+            1,
+            bias=True,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
+        )
         if mid_conv:
             self.mid = ConvNormAct(
-                hidden_features, hidden_features, 3,
-                groups=hidden_features, bias=True, norm_layer=norm_layer, act_layer=act_layer)
+                hidden_features,
+                hidden_features,
+                3,
+                groups=hidden_features,
+                bias=True,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+            )
         else:
             self.mid = nn.Identity()
         self.drop1 = nn.Dropout(drop)
@@ -375,17 +420,17 @@ class LayerScale2d(nn.Module):
 
 class EfficientFormerV2Block(nn.Module):
     def __init__(
-            self,
-            dim,
-            mlp_ratio=4.,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-            proj_drop=0.,
-            drop_path=0.,
-            layer_scale_init_value=1e-5,
-            resolution=7,
-            stride=None,
-            use_attn=True,
+        self,
+        dim,
+        mlp_ratio=4.0,
+        act_layer=nn.GELU,
+        norm_layer=nn.BatchNorm2d,
+        proj_drop=0.0,
+        drop_path=0.0,
+        layer_scale_init_value=1e-5,
+        resolution=7,
+        stride=None,
+        use_attn=True,
     ):
         super().__init__()
 
@@ -396,9 +441,12 @@ class EfficientFormerV2Block(nn.Module):
                 act_layer=act_layer,
                 stride=stride,
             )
-            self.ls1 = LayerScale2d(
-                dim, layer_scale_init_value) if layer_scale_init_value is not None else nn.Identity()
-            self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+            self.ls1 = (
+                LayerScale2d(dim, layer_scale_init_value)
+                if layer_scale_init_value is not None
+                else nn.Identity()
+            )
+            self.drop_path1 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
         else:
             self.token_mixer = None
             self.ls1 = None
@@ -412,9 +460,12 @@ class EfficientFormerV2Block(nn.Module):
             drop=proj_drop,
             mid_conv=True,
         )
-        self.ls2 = LayerScale2d(
-            dim, layer_scale_init_value) if layer_scale_init_value is not None else nn.Identity()
-        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.ls2 = (
+            LayerScale2d(dim, layer_scale_init_value)
+            if layer_scale_init_value is not None
+            else nn.Identity()
+        )
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
     def forward(self, x):
         if self.token_mixer is not None:
@@ -428,35 +479,46 @@ class Stem4(nn.Sequential):
         super().__init__()
         self.stride = 4
         self.conv1 = ConvNormAct(
-            in_chs, out_chs // 2, kernel_size=3, stride=2, padding=1, bias=True,
-            norm_layer=norm_layer, act_layer=act_layer
+            in_chs,
+            out_chs // 2,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+            bias=True,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
         )
         self.conv2 = ConvNormAct(
-            out_chs // 2, out_chs, kernel_size=3, stride=2, padding=1, bias=True,
-            norm_layer=norm_layer, act_layer=act_layer
+            out_chs // 2,
+            out_chs,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+            bias=True,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
         )
 
 
 class EfficientFormerV2Stage(nn.Module):
 
     def __init__(
-            self,
-            dim,
-            dim_out,
-            depth,
-            resolution=7,
-            downsample=True,
-            block_stride=None,
-            downsample_use_attn=False,
-            block_use_attn=False,
-            num_vit=1,
-            mlp_ratio=4.,
-            proj_drop=.0,
-            drop_path=0.,
-            layer_scale_init_value=1e-5,
-            act_layer=nn.GELU,
-            norm_layer=nn.BatchNorm2d,
-
+        self,
+        dim,
+        dim_out,
+        depth,
+        resolution=7,
+        downsample=True,
+        block_stride=None,
+        downsample_use_attn=False,
+        block_use_attn=False,
+        num_vit=1,
+        mlp_ratio=4.0,
+        proj_drop=0.0,
+        drop_path=0.0,
+        layer_scale_init_value=1e-5,
+        act_layer=nn.GELU,
+        norm_layer=nn.BatchNorm2d,
     ):
         super().__init__()
         self.grad_checkpointing = False
@@ -507,27 +569,27 @@ class EfficientFormerV2Stage(nn.Module):
 
 class EfficientFormerV2(nn.Module):
     def __init__(
-            self,
-            depths,
-            in_chans=3,
-            img_size=224,
-            global_pool='avg',
-            embed_dims=None,
-            downsamples=None,
-            mlp_ratios=4,
-            norm_layer='batchnorm2d',
-            norm_eps=1e-5,
-            act_layer='gelu',
-            num_classes=1000,
-            drop_rate=0.,
-            proj_drop_rate=0.,
-            drop_path_rate=0.,
-            layer_scale_init_value=1e-5,
-            num_vit=0,
-            distillation=True,
+        self,
+        depths,
+        in_chans=3,
+        img_size=224,
+        global_pool="avg",
+        embed_dims=None,
+        downsamples=None,
+        mlp_ratios=4,
+        norm_layer="batchnorm2d",
+        norm_eps=1e-5,
+        act_layer="gelu",
+        num_classes=1000,
+        drop_rate=0.0,
+        proj_drop_rate=0.0,
+        drop_path_rate=0.0,
+        layer_scale_init_value=1e-5,
+        num_vit=0,
+        distillation=True,
     ):
         super().__init__()
-        assert global_pool in ('avg', '')
+        assert global_pool in ("avg", "")
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.feature_info = []
@@ -535,12 +597,17 @@ class EfficientFormerV2(nn.Module):
         norm_layer = partial(get_norm_layer(norm_layer), eps=norm_eps)
         act_layer = get_act_layer(act_layer)
 
-        self.stem = Stem4(in_chans, embed_dims[0], act_layer=act_layer, norm_layer=norm_layer)
+        self.stem = Stem4(
+            in_chans, embed_dims[0], act_layer=act_layer, norm_layer=norm_layer
+        )
         prev_dim = embed_dims[0]
         stride = 4
 
         num_stages = len(depths)
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [
+            x.tolist()
+            for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)
+        ]
         downsamples = downsamples or (False,) + (True,) * (len(depths) - 1)
         mlp_ratios = to_ntuple(num_stages)(mlp_ratios)
         stages = []
@@ -566,7 +633,9 @@ class EfficientFormerV2(nn.Module):
             if downsamples[i]:
                 stride *= 2
             prev_dim = embed_dims[i]
-            self.feature_info += [dict(num_chs=prev_dim, reduction=stride, module=f'stages.{i}')]
+            self.feature_info += [
+                dict(num_chs=prev_dim, reduction=stride, module=f"stages.{i}")
+            ]
             stages.append(stage)
         self.stages = nn.Sequential(*stages)
 
@@ -574,10 +643,16 @@ class EfficientFormerV2(nn.Module):
         self.num_features = self.head_hidden_size = embed_dims[-1]
         self.norm = norm_layer(embed_dims[-1])
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.head = (
+            nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        )
         self.dist = distillation
         if self.dist:
-            self.head_dist = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+            self.head_dist = (
+                nn.Linear(embed_dims[-1], num_classes)
+                if num_classes > 0
+                else nn.Identity()
+            )
         else:
             self.head_dist = None
 
@@ -587,19 +662,19 @@ class EfficientFormerV2(nn.Module):
     # init for classification
     def init_weights(self, m):
         if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
+            trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
     @torch.jit.ignore
     def no_weight_decay(self):
-        return {k for k, _ in self.named_parameters() if 'attention_biases' in k}
+        return {k for k, _ in self.named_parameters() if "attention_biases" in k}
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^stem',  # stem and embed
-            blocks=[(r'^stages\.(\d+)', None), (r'^norm', (99999,))]
+            stem=r"^stem",  # stem and embed
+            blocks=[(r"^stages\.(\d+)", None), (r"^norm", (99999,))],
         )
         return matcher
 
@@ -616,8 +691,16 @@ class EfficientFormerV2(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-        self.head_dist = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = (
+            nn.Linear(self.num_features, num_classes)
+            if num_classes > 0
+            else nn.Identity()
+        )
+        self.head_dist = (
+            nn.Linear(self.num_features, num_classes)
+            if num_classes > 0
+            else nn.Identity()
+        )
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):
@@ -630,7 +713,7 @@ class EfficientFormerV2(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        if self.global_pool == 'avg':
+        if self.global_pool == "avg":
             x = x.mean(dim=(2, 3))
         x = self.head_drop(x)
         if pre_logits:
@@ -649,86 +732,104 @@ class EfficientFormerV2(nn.Module):
         return x
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url="", **kwargs):
     return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None, 'fixed_input_size': True,
-        'crop_pct': .95, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'classifier': ('head', 'head_dist'), 'first_conv': 'stem.conv1.conv',
-        **kwargs
+        "url": url,
+        "num_classes": 1000,
+        "input_size": (3, 224, 224),
+        "pool_size": None,
+        "fixed_input_size": True,
+        "crop_pct": 0.95,
+        "interpolation": "bicubic",
+        "mean": IMAGENET_DEFAULT_MEAN,
+        "std": IMAGENET_DEFAULT_STD,
+        "classifier": ("head", "head_dist"),
+        "first_conv": "stem.conv1.conv",
+        **kwargs,
     }
 
 
-default_cfgs = generate_default_cfgs({
-    'efficientformerv2_s0.snap_dist_in1k': _cfg(
-        hf_hub_id='timm/',
-    ),
-    'efficientformerv2_s1.snap_dist_in1k': _cfg(
-        hf_hub_id='timm/',
-    ),
-    'efficientformerv2_s2.snap_dist_in1k': _cfg(
-        hf_hub_id='timm/',
-    ),
-    'efficientformerv2_l.snap_dist_in1k': _cfg(
-        hf_hub_id='timm/',
-    ),
-})
+default_cfgs = generate_default_cfgs(
+    {
+        "efficientformerv2_s0.snap_dist_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "efficientformerv2_s1.snap_dist_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "efficientformerv2_s2.snap_dist_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+        "efficientformerv2_l.snap_dist_in1k": _cfg(
+            hf_hub_id="timm/",
+        ),
+    }
+)
 
 
 def _create_efficientformerv2(variant, pretrained=False, **kwargs):
-    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3))
+    out_indices = kwargs.pop("out_indices", (0, 1, 2, 3))
     model = build_model_with_cfg(
-        EfficientFormerV2, variant, pretrained,
+        EfficientFormerV2,
+        variant,
+        pretrained,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
-        **kwargs)
+        **kwargs,
+    )
     return model
 
 
 @register_model
 def efficientformerv2_s0(pretrained=False, **kwargs) -> EfficientFormerV2:
     model_args = dict(
-        depths=EfficientFormer_depth['S0'],
-        embed_dims=EfficientFormer_width['S0'],
+        depths=EfficientFormer_depth["S0"],
+        embed_dims=EfficientFormer_width["S0"],
         num_vit=2,
         drop_path_rate=0.0,
-        mlp_ratios=EfficientFormer_expansion_ratios['S0'],
+        mlp_ratios=EfficientFormer_expansion_ratios["S0"],
     )
-    return _create_efficientformerv2('efficientformerv2_s0', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_efficientformerv2(
+        "efficientformerv2_s0", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientformerv2_s1(pretrained=False, **kwargs) -> EfficientFormerV2:
     model_args = dict(
-        depths=EfficientFormer_depth['S1'],
-        embed_dims=EfficientFormer_width['S1'],
+        depths=EfficientFormer_depth["S1"],
+        embed_dims=EfficientFormer_width["S1"],
         num_vit=2,
         drop_path_rate=0.0,
-        mlp_ratios=EfficientFormer_expansion_ratios['S1'],
+        mlp_ratios=EfficientFormer_expansion_ratios["S1"],
     )
-    return _create_efficientformerv2('efficientformerv2_s1', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_efficientformerv2(
+        "efficientformerv2_s1", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientformerv2_s2(pretrained=False, **kwargs) -> EfficientFormerV2:
     model_args = dict(
-        depths=EfficientFormer_depth['S2'],
-        embed_dims=EfficientFormer_width['S2'],
+        depths=EfficientFormer_depth["S2"],
+        embed_dims=EfficientFormer_width["S2"],
         num_vit=4,
         drop_path_rate=0.02,
-        mlp_ratios=EfficientFormer_expansion_ratios['S2'],
+        mlp_ratios=EfficientFormer_expansion_ratios["S2"],
     )
-    return _create_efficientformerv2('efficientformerv2_s2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_efficientformerv2(
+        "efficientformerv2_s2", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
 
 
 @register_model
 def efficientformerv2_l(pretrained=False, **kwargs) -> EfficientFormerV2:
     model_args = dict(
-        depths=EfficientFormer_depth['L'],
-        embed_dims=EfficientFormer_width['L'],
+        depths=EfficientFormer_depth["L"],
+        embed_dims=EfficientFormer_width["L"],
         num_vit=6,
         drop_path_rate=0.1,
-        mlp_ratios=EfficientFormer_expansion_ratios['L'],
+        mlp_ratios=EfficientFormer_expansion_ratios["L"],
     )
-    return _create_efficientformerv2('efficientformerv2_l', pretrained=pretrained, **dict(model_args, **kwargs))
-
+    return _create_efficientformerv2(
+        "efficientformerv2_l", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
