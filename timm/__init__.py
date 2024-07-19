@@ -16,3 +16,4 @@ from .models import (
     get_pretrained_cfg as get_pretrained_cfg,
     get_pretrained_cfg_value as get_pretrained_cfg_value,
 )
+from .train import train
