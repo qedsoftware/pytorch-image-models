@@ -10,6 +10,7 @@ import logging
 import operator
 import os
 import shutil
+import mlflow
 
 import torch
 
@@ -153,6 +154,7 @@ class CheckpointSaver:
                 self.best_metric = metric
                 best_save_path = os.path.join(self.checkpoint_dir, 'model_best' + self.extension)
                 self._duplicate(last_save_path, best_save_path)
+                mlflow.pytorch.log_model(self.model, "model")
 
         return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
 
