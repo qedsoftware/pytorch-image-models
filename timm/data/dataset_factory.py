@@ -221,6 +221,7 @@ def create_dataset(
         ds = ImageDataset(
             root,
             reader=name,
+            split=split,
             class_map=class_map,
             load_bytes=load_bytes,
             input_img_mode=input_img_mode,
