@@ -93,6 +93,10 @@ parser.add_argument('--data-dir', metavar='DIR',
                     help='path to dataset (root dir)')
 parser.add_argument('--dataset', metavar='NAME', default='',
                     help='dataset type + name ("<type>/<name>") (default: ImageFolder or ImageTar if empty)')
+parser.add_argument('--train-samples-csv-path', metavar='PATH',
+                    help='path to csv with train filenames and labels')
+parser.add_argument('--val-samples-csv-path', metavar='PATH',
+                    help='path to csv with train filenames and labels')
 group.add_argument('--train-split', metavar='NAME', default='train',
                    help='dataset train split (default: train)')
 group.add_argument('--val-split', metavar='NAME', default='validation',
@@ -669,6 +673,7 @@ def train(config: dict[str, t.Any]):
         input_key=args.input_key,
         target_key=args.target_key,
         num_samples=args.train_num_samples,
+        samples_csv_path=args.train_samples_csv_path,
     )
 
     if args.val_split:
@@ -684,6 +689,7 @@ def train(config: dict[str, t.Any]):
             input_key=args.input_key,
             target_key=args.target_key,
             num_samples=args.val_num_samples,
+            samples_csv_path=args.val_samples_csv_path,
         )
 
     # setup mixup / cutmix
