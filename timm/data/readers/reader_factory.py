@@ -3,6 +3,7 @@ from typing import Optional
 
 from .reader_image_folder import ReaderImageFolder
 from .reader_image_in_tar import ReaderImageInTar
+from .reader_paths_csv import ReaderPathsCsv
 
 
 def create_reader(
@@ -34,6 +35,13 @@ def create_reader(
         from .reader_wds import ReaderWds
         kwargs.pop('download', False)
         reader = ReaderWds(root=root, name=name, split=split, **kwargs)
+    elif "samples_csv_path" in kwargs:
+        assert "class_map" in kwargs
+        reader = ReaderPathsCsv(
+            images_dir=root,
+            samples_csv_path=kwargs["samples_csv_path"], 
+            class_map=kwargs["class_map"],
+        )
     else:
         assert os.path.exists(root)
         # default fallback path (backwards compat), use image tar if root is a .tar file, otherwise image folder
