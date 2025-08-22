@@ -755,6 +755,7 @@ def train(config: dict[str, t.Any]):
         use_multi_epochs_loader=args.use_multi_epochs_loader,
         worker_seeding=args.worker_seeding,
         balance_classes=args.balance_classes,
+        samples_csv_path=args.train_samples_csv_path
     )
 
     loader_eval = None
