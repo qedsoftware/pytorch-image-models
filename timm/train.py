@@ -937,6 +937,10 @@ def train(config: dict[str, t.Any]):
             if eval_metrics:
                 mlflow.log_metric("val loss", eval_metrics["loss"], step=epoch)
                 mlflow.log_metric("val accuracy", eval_metrics["top1"], step=epoch)
+                for vr in utils.EVAL_VERIFICATION_RATES:
+                    mlflow.log_metric(f"FA at {int(100 * vr):03d}", eval_metrics[f"fa@{vr}"])
+                    mlflow.log_metric(f"AFA at {int(100 * vr):03d}", eval_metrics[f"afa@{vr}"])
+
 
             if output_dir is not None:
                 lrs = [param_group['lr'] for param_group in optimizer.param_groups]
@@ -1152,6 +1156,7 @@ def validate(
     losses_m = utils.AverageMeter()
     top1_m = utils.AverageMeter()
     top5_m = utils.AverageMeter()
+    correct_with_confidences_m = utils.CorrectnessOfPredictionsWithConfidencesMeter()
 
     model.eval()
 
@@ -1193,6 +1198,7 @@ def validate(
             losses_m.update(reduced_loss.item(), input.size(0))
             top1_m.update(acc1.item(), output.size(0))
             top5_m.update(acc5.item(), output.size(0))
+            correct_with_confidences_m.update(output, target)
 
             batch_time_m.update(time.time() - end)
             end = time.time()
@@ -1206,7 +1212,32 @@ def validate(
                     f'Acc@5: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
                 )
 
-    metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg)])
+    metrics = OrderedDict(
+        [
+            ("loss", losses_m.avg),
+            ("top1", top1_m.avg),
+            ("top5", top5_m.avg),
+            *[
+                (f"fa@{vr}", fa)
+                for vr, fa in zip(
+                    utils.EVAL_VERIFICATION_RATES,
+                    correct_with_confidences_m.final_accuracy(
+                        utils.EVAL_VERIFICATION_RATES
+                    ),
+                )
+            ],
+            *[
+                (f"afa@{vr}", afa)
+                for vr, afa in zip(
+                    utils.EVAL_VERIFICATION_RATES,
+                    correct_with_confidences_m.average_final_accuracy(
+                        utils.EVAL_VERIFICATION_RATES
+                    ),
+                )
+            ],
+        ]
+    )
+
 
     return metrics
 
