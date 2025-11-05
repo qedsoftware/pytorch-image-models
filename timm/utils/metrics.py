@@ -49,7 +49,7 @@ class CorrectnessOfPredictionsWithConfidencesMeter:
 
         def _fa(vr):
             n_verified = round(vr * N)
-            return (n_verified + correct_sorted[n_verified:].sum()) / N
+            return (n_verified + correct_sorted[n_verified:].sum().item()) / N
 
         return [_fa(vr) for vr in vrs]
     
@@ -67,8 +67,8 @@ class CorrectnessOfPredictionsWithConfidencesMeter:
             afa_weights = torch.arange(1, N + 1) / n_verified
             return (
                 (n_verified - 1) / 2
-                + (afa_weights[:n_verified] * correct_sorted[:n_verified]).sum()
-                + correct_sorted[n_verified:].sum()
+                + (afa_weights[:n_verified] * correct_sorted[:n_verified]).sum().item()
+                + correct_sorted[n_verified:].sum().item()
             ) / N
 
         return [_afa(vr) for vr in vrs]
