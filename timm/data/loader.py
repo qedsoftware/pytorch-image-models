@@ -335,7 +335,7 @@ def create_loader(
         if balance_classes:
             assert dataset_csv_path, "Provide csv with labels to use balance_classes."
             dataset_csv = pd.read_csv(dataset_csv_path)
-            all_labels = dataset_csv["label"].tolist()
+            all_labels = dataset_csv["label"].values
             unique, counts = np.unique(all_labels, return_counts=True)
             unique_counts = {v: c for v, c in zip(unique, counts)}
             label_weights = np.array([1 / unique_counts[num] for num in all_labels])
